@@ -16,7 +16,7 @@ const motorBackend = {
   sincronizarEFetch: async function() {
     try {
       // 1. Conecta no seu servidor local em vez do Supabase
-      const response = await fetch('http://localhost:3000/api/carteira');
+      const response = await fetch('http://192.168.1.10:3000/api/carteira');
       
       if (!response.ok) {
         throw new Error('Erro ao conectar no servidor local. Verifique se o terminal está rodando.');
