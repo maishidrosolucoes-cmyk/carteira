@@ -15,11 +15,11 @@ const motorBackend = {
 
   sincronizarEFetch: async function() {
     try {
-      // 1. Conecta no seu servidor local em vez do Supabase
-      const response = await fetch('http://192.168.1.10:3000/api/carteira');
+      // 1. Conecta no seu servidor local na rede da empresa (O seu PC)
+      const response = await fetch('http://192.168.0.10:3000/api/carteira');
       
       if (!response.ok) {
-        throw new Error('Erro ao conectar no servidor local. Verifique se o terminal está rodando.');
+        throw new Error('Erro ao conectar no servidor local. Verifique se o terminal está rodando no PC.');
       }
       
       const erpData = await response.json();
@@ -38,36 +38,29 @@ const motorBackend = {
           const numObra = String(erp.obra || '').trim();
           if(!numObra) return;
 
-          // --- NOVO FILTRO E LIMPEZA: APENAS OBRAS DE 2026 (IGNORA 2023) ---
-          // A expressão agora exige que o "26" seja seguido de pelo menos 3 números (ex: 26.001, 26085).
-          // Como a obra "26-23" tem apenas 2 números após o traço, ela será descartada automaticamente!
+          // --- FILTRO: APENAS OBRAS DE 2026 (IGNORA 2023 E OUTROS) ---
           const matchNum = numObra.match(/26[.,-]?\d{3,}/);
-          if (!matchNum) return; // Se não for padrão de 2026, pula a linha
+          if (!matchNum) return; 
 
-          const numObraLimpo = matchNum[0]; // Guarda apenas a numeração limpa (ex: 26.001)
+          const numObraLimpo = matchNum[0]; 
 
           // --- PREVENÇÃO DE DUPLICATAS (AGRUPAMENTO) ---
-          // Se a obra já existe na nossa memória, não criamos linha nova (evita duplicar valores).
-          // Em vez disso, apenas juntamos o nome do item para ficar rico em detalhes!
           if (obrasProcessadas[numObraLimpo]) {
             const linhaExistente = obrasProcessadas[numObraLimpo];
             
             const itemAtual = String(erp.item || '').trim();
-            // Se o item for novo, junta com uma barra "/" (Coluna 20 é o ITEM)
             if (itemAtual && !linhaExistente[20].includes(itemAtual)) {
               linhaExistente[20] += " / " + itemAtual;
             }
 
             const catAtual = String(erp.categoria || '').trim();
-            // Junta categorias se forem diferentes (Coluna 21 é a CATEGORIA)
             if (catAtual && !linhaExistente[21].includes(catAtual)) {
               linhaExistente[21] += " / " + catAtual;
             }
-
-            return; // Pula para o próximo registo do ERP ignorando o resto!
+            return; 
           }
 
-          // Puxando o valor total correto da sua view (apenas na 1ª vez que a obra aparece)
+          // Puxando o valor total correto da sua view
           const valorERP = erp.p_total !== null ? erp.p_total : "0";
 
           // Lógica automática para definir o STATUS DA PROPOSTA
@@ -119,16 +112,12 @@ const motorBackend = {
           obrasProcessadas[numObraLimpo] = novaLinha;
         });
 
-        // --- ORDENAÇÃO CRESCENTE E DEFINITIVA ---
-        // Pega todas as obras únicas da memória
+        // Ordenação crescente e definitiva
         const listaObras = Object.values(obrasProcessadas);
-
-        // Garante a ordenação crescente (ex: 26.001 até 26.999) lendo numericamente a Coluna 1
         listaObras.sort((a, b) => {
           return a[1].localeCompare(b[1], 'pt-BR', { numeric: true });
         });
 
-        // No final, insere na listagem de resultado final
         listaObras.forEach(linha => resultado.push(linha));
       }
 
