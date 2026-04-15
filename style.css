@@ -238,7 +238,8 @@ body { background-color: var(--bg-light); font-family: 'Segoe UI', sans-serif; c
 .btn:active { transform: scale(0.97); }
 
 body.modal-open-blur #mainContent { filter: blur(6px); transition: 0.22s ease; }
-body.child-modal-open { overflow: hidden; }
+body.modal-open-blur #mainContent { pointer-events: none; }
+body.child-modal-open { overflow: hidden; touch-action: none; }
 #corpoResumoGeral,
 .resumo-modal-scroll,
 #modalResumoGeral .geral-shell,
@@ -338,6 +339,20 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .mc-obra-title, .mc-client, .mc-category { min-width: 0; word-break: break-word; }
 
 @media (max-width: 768px) {
+  .modal {
+    padding-right: 0 !important;
+  }
+
+  .modal-backdrop.show {
+    opacity: 0.58;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  body.child-modal-open .modal-backdrop.show {
+    opacity: 0.72;
+  }
+
   #modalObra .modal-content,
   #modalCompraItem .modal-content,
   #modalPendenciaItem .modal-content,
@@ -352,6 +367,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   #modalPendenciaItem .modal-body,
   #modalResumoGeral .modal-body,
   #modalExtracaoRelatorio .modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #modalObra,
+  #modalCompraItem,
+  #modalPendenciaItem,
+  #modalResumoGeral,
+  #modalExtracaoRelatorio {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
