@@ -620,3 +620,244 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-size: 1.14rem;
   }
 }
+/* --- AJUSTE EXCLUSIVO MOBILE: DETALHE FINANCEIRO NO MODAL DE RESUMO --- */
+@media (max-width: 768px) {
+  #modalResumoGeral .resumo-modal-shell {
+    gap: 12px;
+  }
+
+  #modalResumoGeral .finance-headline {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  #modalResumoGeral .finance-headline-item {
+    align-items: flex-start;
+    padding: 12px 14px;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  }
+
+  #modalResumoGeral .finance-headline-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    font-size: 1rem;
+  }
+
+  #modalResumoGeral .finance-headline-label {
+    font-size: 0.7rem;
+    line-height: 1.12;
+  }
+
+  #modalResumoGeral .finance-headline-value {
+    font-size: 1rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #modalResumoGeral .finance-progress-wrap {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+  }
+
+  #modalResumoGeral .finance-progress-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.25;
+  }
+
+  #modalResumoGeral .finance-progress-main {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  #modalResumoGeral .finance-insight-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  #modalResumoGeral .finance-insight-card {
+    padding: 12px 14px;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+  }
+
+  #modalResumoGeral .finance-insight-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  #modalResumoGeral .finance-insight-card-label {
+    font-size: 0.7rem;
+    line-height: 1.12;
+  }
+
+  #modalResumoGeral .finance-insight-card-value {
+    font-size: 0.92rem;
+    line-height: 1.2;
+  }
+
+  #modalResumoGeral .finance-insight-card-meta {
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #modalResumoGeral .finance-kpi-list {
+    gap: 8px;
+  }
+
+  #modalResumoGeral .finance-kpi-row {
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.3;
+  }
+
+  #modalResumoGeral .finance-kpi-name,
+  #modalResumoGeral .finance-kpi-data {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #modalResumoGeral .finance-insight {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border-radius: 16px;
+    line-height: 1.35;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+  }
+
+  #modalResumoGeral .finance-scroll-area {
+    margin-top: 0;
+  }
+
+  #modalResumoGeral .finance-table-shell {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  }
+
+  #modalResumoGeral .finance-table-shell .table-responsive {
+    max-height: min(42dvh, 360px);
+    background: #ffffff;
+    border-radius: inherit;
+  }
+
+  #modalResumoGeral .finance-table-shell table {
+    margin-bottom: 0;
+  }
+
+  #modalResumoGeral .finance-table-shell thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.65rem;
+    padding: 10px 8px;
+    white-space: nowrap;
+  }
+
+  #modalResumoGeral .finance-table-shell tbody td,
+  #modalResumoGeral .finance-table-shell tfoot td {
+    padding: 10px 8px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    vertical-align: top;
+    white-space: normal;
+  }
+
+  #modalResumoGeral .finance-item-name {
+    min-width: 112px;
+    font-size: 0.74rem;
+    line-height: 1.25;
+    text-align: left;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #modalResumoGeral .finance-status-badge,
+  #modalResumoGeral .finance-percent-main,
+  #modalResumoGeral .finance-percent-sub {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 576px) {
+  #modalResumoGeral .finance-headline {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  #modalResumoGeral .finance-headline-item,
+  #modalResumoGeral .finance-progress-wrap,
+  #modalResumoGeral .finance-insight-card,
+  #modalResumoGeral .finance-insight {
+    padding: 11px 12px;
+    border-radius: 15px;
+  }
+
+  #modalResumoGeral .finance-headline-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    font-size: 0.95rem;
+  }
+
+  #modalResumoGeral .finance-headline-label,
+  #modalResumoGeral .finance-insight-card-label {
+    font-size: 0.68rem;
+  }
+
+  #modalResumoGeral .finance-headline-value {
+    font-size: 0.94rem;
+  }
+
+  #modalResumoGeral .finance-progress-top,
+  #modalResumoGeral .finance-insight,
+  #modalResumoGeral .finance-kpi-row {
+    font-size: 0.75rem;
+  }
+
+  #modalResumoGeral .finance-insight-card-value {
+    font-size: 0.88rem;
+  }
+
+  #modalResumoGeral .finance-table-shell {
+    border-radius: 15px;
+  }
+
+  #modalResumoGeral .finance-table-shell .table-responsive {
+    max-height: min(40dvh, 300px);
+  }
+
+  #modalResumoGeral .finance-table-shell thead th {
+    font-size: 0.62rem;
+    padding: 9px 7px;
+  }
+
+  #modalResumoGeral .finance-table-shell tbody td,
+  #modalResumoGeral .finance-table-shell tfoot td {
+    padding: 9px 7px;
+    font-size: 0.7rem;
+  }
+
+  #modalResumoGeral .finance-item-name {
+    min-width: 98px;
+    font-size: 0.72rem;
+  }
+}
