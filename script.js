@@ -61,45 +61,45 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   }
 
   function setMobileFeedback(html) {
-      const mobileContainer = document.getElementById('mobileCardsContainer');
-      if (mobileContainer) mobileContainer.innerHTML = html;
-    }
-  
-    function renderizarCarregamentoTela(mensagem = 'Conectando ao Supabase (ERP)...') {
-      const htmlDesktop = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">${escapeHtml(mensagem)}</span></td></tr>`;
-      const htmlMobile = `<div class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">${escapeHtml(mensagem)}</span></div>`;
-  
-      const tabBody = document.getElementById('tabBody');
-      if (tabBody) tabBody.innerHTML = htmlDesktop;
-      setMobileFeedback(htmlMobile);
-    }
-  
-    function renderizarFalhaTela(titulo, mensagem, iconClass = 'bi bi-database-x') {
-      const tituloSeguro = escapeHtml(titulo || 'Falha ao carregar os dados');
-      const mensagemSegura = escapeHtml(mensagem || 'Erro inesperado.');
-  
-      const htmlDesktop = `
-        <tr><td colspan="20" class="text-center py-5 text-danger">
-          <i class="${iconClass} me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
-          <h5 class="fw-bold">${tituloSeguro}</h5>
-          <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
-            ${mensagemSegura}
-          </span>
-        </td></tr>
-      `;
-  
-      const htmlMobile = `
-        <div class="text-center py-5 px-3 text-danger">
-          <i class="${iconClass} d-block mb-3" style="font-size: 2.7rem;"></i>
-          <h6 class="fw-bold mb-2">${tituloSeguro}</h6>
-          <p class="text-muted mb-0">${mensagemSegura}</p>
-        </div>
-      `;
-  
-      const tabBody = document.getElementById('tabBody');
-      if (tabBody) tabBody.innerHTML = htmlDesktop;
-      setMobileFeedback(htmlMobile);
-    }
+    const mobileContainer = document.getElementById('mobileCardsContainer');
+    if (mobileContainer) mobileContainer.innerHTML = html;
+  }
+
+  function renderizarCarregamentoTela(mensagem = 'Conectando ao Supabase (ERP)...') {
+    const htmlDesktop = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">${escapeHtml(mensagem)}</span></td></tr>`;
+    const htmlMobile = `<div class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">${escapeHtml(mensagem)}</span></div>`;
+
+    const tabBody = document.getElementById('tabBody');
+    if (tabBody) tabBody.innerHTML = htmlDesktop;
+    setMobileFeedback(htmlMobile);
+  }
+
+  function renderizarFalhaTela(titulo, mensagem, iconClass = 'bi bi-database-x') {
+    const tituloSeguro = escapeHtml(titulo || 'Falha ao carregar os dados');
+    const mensagemSegura = escapeHtml(mensagem || 'Erro inesperado.');
+
+    const htmlDesktop = `
+      <tr><td colspan="20" class="text-center py-5 text-danger">
+        <i class="${iconClass} me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
+        <h5 class="fw-bold">${tituloSeguro}</h5>
+        <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
+          ${mensagemSegura}
+        </span>
+      </td></tr>
+    `;
+
+    const htmlMobile = `
+      <div class="text-center py-5 px-3 text-danger">
+        <i class="${iconClass} d-block mb-3" style="font-size: 2.7rem;"></i>
+        <h6 class="fw-bold mb-2">${tituloSeguro}</h6>
+        <p class="text-muted mb-0">${mensagemSegura}</p>
+      </div>
+    `;
+
+    const tabBody = document.getElementById('tabBody');
+    if (tabBody) tabBody.innerHTML = htmlDesktop;
+    setMobileFeedback(htmlMobile);
+  }
 
   function callServer(method, args, onSuccess, onError) {
     let settled = false;
@@ -333,22 +333,22 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   
   let modalUI; let modalResumoUI; let modalCompraUI; let modalPendenciaUI; let modalObraEl;
   const NESTED_MODAL_IDS = ['modalCompraItem', 'modalResumoGeral', 'modalPendenciaItem'];
-  
-    function sincronizarEstadoVisualModais() {
-      const modalObraAberto = !!(modalObraEl && modalObraEl.classList.contains('show'));
-      const modalFilhoAberto = NESTED_MODAL_IDS.some(id => {
-        const el = document.getElementById(id);
-        return !!(el && el.classList.contains('show'));
-      });
-  
-      const aplicarEstadoFilho = modalObraAberto && modalFilhoAberto;
-      document.body.classList.toggle('child-modal-open', aplicarEstadoFilho);
-      document.body.classList.toggle('modal-open-blur', aplicarEstadoFilho);
-  
-      if (modalObraAberto) {
-        document.body.classList.add('modal-open');
-      }
+
+  function sincronizarEstadoVisualModais() {
+    const modalObraAberto = !!(modalObraEl && modalObraEl.classList.contains('show'));
+    const modalFilhoAberto = NESTED_MODAL_IDS.some(id => {
+      const el = document.getElementById(id);
+      return !!(el && el.classList.contains('show'));
+    });
+
+    const aplicarEstadoFilho = modalObraAberto && modalFilhoAberto;
+    document.body.classList.toggle('child-modal-open', aplicarEstadoFilho);
+    document.body.classList.toggle('modal-open-blur', aplicarEstadoFilho);
+
+    if (modalObraAberto) {
+      document.body.classList.add('modal-open');
     }
+  }
   
   function initModais() {
     if (!window.bootstrap?.Modal) return;
@@ -369,10 +369,13 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     NESTED_MODAL_IDS.forEach(modalId => {
       const modalEl = document.getElementById(modalId);
       if (!modalEl) return;
+      modalEl.addEventListener('show.bs.modal', sincronizarEstadoVisualModais);
       modalEl.addEventListener('shown.bs.modal', sincronizarEstadoVisualModais);
+      modalEl.addEventListener('hide.bs.modal', sincronizarEstadoVisualModais);
       modalEl.addEventListener('hidden.bs.modal', sincronizarEstadoVisualModais);
     });
 
+    modalObraEl.addEventListener('show.bs.modal', sincronizarEstadoVisualModais);
     modalObraEl.addEventListener('shown.bs.modal', sincronizarEstadoVisualModais);
     modalObraEl.addEventListener('hidden.bs.modal', function () {
       document.body.classList.remove('child-modal-open', 'modal-open-blur');
@@ -926,7 +929,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
   function carregar() {
     renderizarCarregamentoTela('Conectando ao Supabase (ERP)...');
-
+    
     // CHAMADA ORIGINAL COM O FILTRO DE ANO ADICIONADO
     callServer('sincronizarEFetch', [currentAnoFilter], data => {
       if (!Array.isArray(data) || data.length === 0) { 
@@ -1577,24 +1580,12 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     viewport.style.maxHeight = `${alturaDisponivel}px`; viewport.classList.add('table-scroll-locked');
   }
 
-  window.addEventListener('resize', () => {
-    fecharMenuExtracao();
-    ajustarRolagemDaTabela();
-  });
+  window.addEventListener('resize', ajustarRolagemDaTabela);
 
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', ajustarRolagemDaTabela);
-  }
-
-  window.addEventListener('orientationchange', () => {
-    fecharMenuExtracao();
-    setTimeout(ajustarRolagemDaTabela, 120);
-  });
-
-  window.addEventListener('load', () => { 
+  window.onload = () => { 
     initModais();
     configurarCabecalhoData();
     carregarGrade();
     carregar(); 
     setTimeout(ajustarRolagemDaTabela, 120);
-  });
+  };
