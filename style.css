@@ -902,3 +902,129 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-size: 0.72rem;
   }
 }
+/* --- AJUSTE FINAL EXCLUSIVO MOBILE: MODAIS NATIVOS, HEADER FIXO E EMPILHAMENTO --- */
+@media (max-width: 768px) {
+  #modalObra .modal-dialog,
+  #modalResumoGeral .modal-dialog {
+    min-height: calc(100dvh - 0.4rem);
+    margin: 0.2rem auto;
+  }
+
+  #modalObra .modal-content,
+  #modalResumoGeral .modal-content {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 0.4rem);
+    max-height: calc(100dvh - 0.4rem);
+    overflow: hidden;
+  }
+
+  #modalObra .modal-header,
+  #modalResumoGeral .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    flex: 0 0 auto;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  #modalObra .modal-header {
+    align-items: center;
+  }
+
+  #modalObra .modal-header .ms-auto,
+  #modalObra .modal-header-actions {
+    flex-wrap: nowrap;
+  }
+
+  #modalObra .modal-header-actions {
+    gap: 12px !important;
+  }
+
+  #modalObra .modal-body,
+  #modalResumoGeral .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-top: 12px;
+  }
+
+  #modalObra .modal-body {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: 108px;
+  }
+
+  #modalObra .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 11;
+    flex: 0 0 auto;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  #modalResumoGeral .resumo-modal-scroll {
+    padding-bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  #modalResumoGeral .geral-shell,
+  #modalResumoGeral .resumo-modal-shell {
+    gap: 12px !important;
+  }
+
+  #modalResumoGeral .geral-grid,
+  #modalResumoGeral .geral-finance-grid,
+  #modalResumoGeral .finance-headline,
+  #modalResumoGeral .finance-summary-grid,
+  #modalResumoGeral .finance-insight-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  #modalResumoGeral .geral-card,
+  #modalResumoGeral .finance-headline-item,
+  #modalResumoGeral .finance-insight-card,
+  #modalResumoGeral .finance-progress-wrap,
+  #modalResumoGeral .finance-insight {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  #modalObra .modal-dialog,
+  #modalResumoGeral .modal-dialog {
+    min-height: calc(100dvh - 0.3rem);
+    margin: 0.15rem auto;
+  }
+
+  #modalObra .modal-content,
+  #modalResumoGeral .modal-content {
+    height: calc(100dvh - 0.3rem);
+    max-height: calc(100dvh - 0.3rem);
+    border-radius: 18px;
+  }
+
+  #modalObra .modal-header,
+  #modalResumoGeral .modal-header {
+    padding: 0.85rem 0.95rem;
+  }
+
+  #modalObra .modal-footer {
+    padding-top: 0.7rem;
+    padding-bottom: calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  #modalResumoGeral .geral-grid,
+  #modalResumoGeral .geral-finance-grid,
+  #modalResumoGeral .finance-headline,
+  #modalResumoGeral .finance-summary-grid,
+  #modalResumoGeral .finance-insight-grid {
+    gap: 10px !important;
+  }
+}
