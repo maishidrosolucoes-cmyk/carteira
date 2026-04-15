@@ -227,6 +227,11 @@ function resolverIdentidadeObra(erp) {
   };
 }
 
+function deveExibirSomenteObras2026(registro) {
+  const canonica = normalizeSpaces(registro && registro.identidade ? registro.identidade.obraCanonica : "");
+  return /^26\.\d+$/i.test(canonica);
+}
+
 function calcularStatusProposta(erp) {
   const etapaUp = String(erp.etapa || "").toUpperCase();
   const temNF = !!normalizeSpaces(erp.nf || "");
@@ -470,7 +475,11 @@ const motorBackend = {
           const registro = construirRegistroERP(erp);
           if (!registro.identidade.obraExibicao) return;
 
-          if (anoFiltro !== 'TODOS' && registro.anoCompetencia !== String(anoFiltro)) {
+          if (!deveExibirSomenteObras2026(registro)) {
+            return;
+          }
+
+          if (anoFiltro !== 'TODOS' && String(anoFiltro) !== '26') {
             return;
           }
 
