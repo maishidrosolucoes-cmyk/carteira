@@ -5,17 +5,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     STATUS_PROPOSTA: 22, DATA_ABERTURA: 23, SEGMENTO: 24, RESPONSAVEL: 25, COMPLEXIDADE: 26, UF: 27, ETAPA: 28, NF: 29, DATA_FRUSTRADA: 30, DATA_ENVIADA: 31, DATA_FATURAMENTO: 32
   });
   
-  let currentStatusFilter = 'FIRMADAS'; // Original Intacto
-  let currentAnoFilter = 'TODOS'; 
-
-  function mudarAno(ano) {
-    currentAnoFilter = ano;
-    const selectMobile = document.getElementById('anoFilterMobile');
-    const selectPC = document.getElementById('anoFilterPC');
-    if (selectMobile) selectMobile.value = ano;
-    if (selectPC) selectPC.value = ano;
-    carregar(); 
-  }
+  let currentStatusFilter = 'FIRMADAS';
 
   function setFilter(status) {
     currentStatusFilter = status;
@@ -25,10 +15,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
         btn.classList.add('active');
       }
     });
-    const selectEl = document.getElementById('statusFilter');
-    if (selectEl && selectEl.value !== status) {
-      selectEl.value = status;
-    }
     renderizar(dadosLocais.slice(1));
   }
 
@@ -90,6 +76,13 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
             <i class="bi bi-file-earmark-x text-danger d-block mb-3" style="font-size: 3.5rem;"></i>
             <h4 class="text-danger fw-bold">ARQUIVO DO MOTOR NÃO ENCONTRADO</h4>
             <p class="text-muted mt-2">O navegador tentou ligar o motor do Supabase, mas o arquivo não foi carregado.</p>
+            <div class="text-start d-inline-block bg-light p-3 rounded border mt-3 shadow-sm">
+              <strong>O que você deve fazer agora:</strong><br><br>
+              1. Vá na sua pasta do Windows.<br>
+              2. Tem um arquivo lá chamado <strong>motorbackand</strong> (com a letra A).<br>
+              3. Renomeie ele para <strong>motorbackend.js</strong> (com a letra E).<br>
+              4. Depois de renomear, volte aqui e aperte F5.
+            </div>
           </div>
         `;
         document.getElementById('tabBody').innerHTML = `<tr><td colspan="20">${diagHtml}</td></tr>`;
@@ -178,13 +171,17 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     return `${dia}/${mes}/${ano}`;
   }
 
+  function sanitizeMoneyText(value) { return String(value || "").trim(); }
+
   function sanitizeInteger(value) {
     const num = parseInt(String(value || "").trim(), 10);
     return Number.isFinite(num) && num >= 0 ? String(num) : "";
   }
 
+  // ==== NOVO MOTOR DE CONVERSÃO FINANCEIRA (100% BLINDADO) ====
   function parseMoneyFlexible(value) {
     if (value === null || value === undefined || value === '') return 0;
+    // Se o valor já for número limpo do banco (ex: 2292.152), usa direto!
     if (typeof value === 'number') return value;
 
     let str = String(value).trim();
@@ -192,13 +189,16 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
     str = str.replace(/\s/g, '').replace(/[R$r$\u00A0]/g, '');
 
+    // Se o usuário digitou com vírgula, garante que é o formato Brasileiro
     if (str.includes(',')) {
       str = str.replace(/\./g, '').replace(',', '.');
     } else {
+      // Se não tem vírgula, e tem mais de um ponto (ex: 2.000.000), os pontos são milhares
       const dotCount = (str.match(/\./g) || []).length;
       if (dotCount > 1) {
         str = str.replace(/\./g, '');
       }
+      // Se tiver apenas 1 ponto (ex: "2292.15200"), mantém o ponto, pois é o formato padrão do DB.
     }
 
     str = str.replace(/[^\d.-]/g, '');
@@ -208,6 +208,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
   function formatMoneyBR(value) {
     const num = parseMoneyFlexible(value);
+    // Garantia de não exibir centavos e formatar com os pontos visualmente corretos
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
@@ -294,27 +295,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   };
   
   let modalUI; let modalResumoUI; let modalCompraUI; let modalPendenciaUI; let modalObraEl;
-  const NESTED_MODAL_IDS = ['modalCompraItem', 'modalResumoGeral', 'modalPendenciaItem'];
-  const ALL_MODAL_IDS = ['modalObra', 'modalCompraItem', 'modalPendenciaItem', 'modalResumoGeral', 'modalExtracaoRelatorio'];
-
-  function sincronizarEstadoVisualModais() {
-    const modalObraAberto = !!(modalObraEl && modalObraEl.classList.contains('show'));
-    const temModalAberto = ALL_MODAL_IDS.some(id => {
-      const el = document.getElementById(id);
-      return !!(el && el.classList.contains('show'));
-    });
-    const temModalFilhoComObra = modalObraAberto && NESTED_MODAL_IDS.some(id => {
-      const el = document.getElementById(id);
-      return !!(el && el.classList.contains('show'));
-    });
-
-    document.body.classList.toggle('modal-open-blur', temModalAberto);
-    document.body.classList.toggle('child-modal-open', temModalFilhoComObra);
-
-    if (temModalAberto) document.body.classList.add('modal-open');
-    else document.body.classList.remove('modal-open');
-  }
-
+  
   function initModais() {
     modalUI = new bootstrap.Modal(document.getElementById('modalObra'));
     modalResumoUI = new bootstrap.Modal(document.getElementById('modalResumoGeral'));
@@ -322,23 +303,13 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     modalPendenciaUI = new bootstrap.Modal(document.getElementById('modalPendenciaItem'));
     modalObraEl = document.getElementById('modalObra');
 
-    ALL_MODAL_IDS.forEach(modalId => {
+    const nestedModalIds = ['modalCompraItem', 'modalResumoGeral', 'modalPendenciaItem'];
+    nestedModalIds.forEach(modalId => {
       const modalEl = document.getElementById(modalId);
       if (!modalEl) return;
-      ['show.bs.modal', 'shown.bs.modal', 'hide.bs.modal', 'hidden.bs.modal'].forEach(evt => {
-        modalEl.addEventListener(evt, function () {
-          requestAnimationFrame(sincronizarEstadoVisualModais);
-        });
+      modalEl.addEventListener('show.bs.modal', function () {
+        if (modalObraEl && modalObraEl.classList.contains('show')) document.body.classList.add('child-modal-open');
       });
-    });
-
-    if (modalObraEl) {
-      modalObraEl.addEventListener('hidden.bs.modal', function () {
-        document.body.classList.remove('child-modal-open', 'modal-open-blur');
-        sincronizarEstadoVisualModais();
-      });
-    }
-  });
       modalEl.addEventListener('hidden.bs.modal', function () {
         const aindaTemModalFilhoAberto = nestedModalIds.some(id => { const el = document.getElementById(id); return el && el.classList.contains('show'); });
         if (!aindaTemModalFilhoAberto) document.body.classList.remove('child-modal-open');
@@ -431,7 +402,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     if (estadoOrdenacao.key === chave) {
       estadoOrdenacao.dir = estadoOrdenacao.dir === 'asc' ? 'desc' : 'asc';
     } else {
-      estadoOrdenacao = { key: chave, dir: (chave === 'cliente' || chave === 'obra') ? 'asc' : 'desc' };
+      estadoOrdenacao = { key: chave, dir: chave === 'cliente' ? 'asc' : 'desc' };
     }
     renderizar(dadosLocais.slice(1));
   }
@@ -441,61 +412,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     if (!txt || txt === "N/A" || txt === "OK" || txt === "?") return null;
     const d = parseDataUniversal(txt);
     return d ? d.getTime() : null;
-  }
-
-  function extrairChaveOrdenacaoObra(valor) {
-    const raw = String(valor || '').trim();
-    if (!raw) {
-      return { hasCanon: false, ano: Number.MAX_SAFE_INTEGER, sequencia: Number.MAX_SAFE_INTEGER, display: '', raw: '' };
-    }
-
-    const match = raw.match(/(?:^|[^0-9])(?:ob\s*ra\s*)?((20\d{2}|\d{2})\s*[.,\-\/]\s*(\d{1,5})|(20\d{2}|\d{2})\s+(\d{1,5}))(?!\d)/i);
-    if (!match) {
-      return { hasCanon: false, ano: Number.MAX_SAFE_INTEGER, sequencia: Number.MAX_SAFE_INTEGER, display: raw, raw };
-    }
-
-    let ano = String(match[2] || match[4] || '').trim();
-    const seqBruta = String(match[3] || match[5] || '').trim();
-    if (!ano || !seqBruta) {
-      return { hasCanon: false, ano: Number.MAX_SAFE_INTEGER, sequencia: Number.MAX_SAFE_INTEGER, display: raw, raw };
-    }
-
-    if (ano.length === 4) ano = ano.slice(-2);
-
-    const anoNum = parseInt(ano, 10);
-    const seqNum = parseInt(seqBruta, 10);
-    if (!Number.isFinite(anoNum) || !Number.isFinite(seqNum)) {
-      return { hasCanon: false, ano: Number.MAX_SAFE_INTEGER, sequencia: Number.MAX_SAFE_INTEGER, display: raw, raw };
-    }
-
-    return {
-      hasCanon: true,
-      ano: anoNum,
-      sequencia: seqNum,
-      display: `${String(anoNum).padStart(2, '0')}.${String(seqNum).padStart(Math.max(3, seqBruta.length), '0')}`,
-      raw
-    };
-  }
-
-  function compararObrasCanonicas(valorA, valorB, dir = 'asc') {
-    const a = extrairChaveOrdenacaoObra(valorA);
-    const b = extrairChaveOrdenacaoObra(valorB);
-
-    let resultado = 0;
-
-    if (a.hasCanon && b.hasCanon) {
-      if (a.ano !== b.ano) resultado = a.ano - b.ano;
-      else if (a.sequencia !== b.sequencia) resultado = a.sequencia - b.sequencia;
-      else resultado = a.raw.localeCompare(b.raw, 'pt-BR', { numeric: true, sensitivity: 'base' });
-    } else if (a.hasCanon && !b.hasCanon) {
-      resultado = -1;
-    } else if (!a.hasCanon && b.hasCanon) {
-      resultado = 1;
-    } else {
-      resultado = a.raw.localeCompare(b.raw, 'pt-BR', { numeric: true, sensitivity: 'base' });
-    }
-
-    return dir === 'asc' ? resultado : -resultado;
   }
 
   function compararValores(a, b, dir = 'asc') {
@@ -518,12 +434,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
       let valorA = null; let valorB = null;
 
-      if (chave === 'obra') {
-        const resultadoObra = compararObrasCanonicas(rA[COLS.OBRA], rB[COLS.OBRA], estadoOrdenacao.dir);
-        if (resultadoObra !== 0) return resultadoObra;
-        valorA = String(rA[COLS.OBRA] || '').trim();
-        valorB = String(rB[COLS.OBRA] || '').trim();
-      } 
+      if (chave === 'obra') { valorA = String(rA[COLS.OBRA] || '').trim(); valorB = String(rB[COLS.OBRA] || '').trim(); } 
       else if (chave === 'cliente') { valorA = String(rA[COLS.CLIENTE] || '').trim(); valorB = String(rB[COLS.CLIENTE] || '').trim(); } 
       else if (chave === 'valor') { valorA = parseMoneyFlexible(rA[COLS.VALOR]); valorB = parseMoneyFlexible(rB[COLS.VALOR]); } 
       else if (chave === 'itemGeral') { valorA = String(rA[COLS.ITEM_GERAL] || '').trim(); valorB = String(rB[COLS.ITEM_GERAL] || '').trim(); } 
@@ -544,7 +455,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
       const resultado = compararValores(valorA, valorB, estadoOrdenacao.dir);
       if (resultado !== 0) return resultado;
-      return compararObrasCanonicas(rA[COLS.OBRA], rB[COLS.OBRA], 'asc');
+      return String(rA[COLS.OBRA] || '').localeCompare(String(rB[COLS.OBRA] || ''), 'pt-BR', { numeric: true });
     });
   }
 
@@ -626,7 +537,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   function renderizar(dadosOriginais) {
     const head = document.getElementById('tabHead');
     const body = document.getElementById('tabBody');
-    const mobileContainer = document.getElementById('mobileCardsContainer');
 
     const dados = dadosOriginais.filter(d => {
       if (currentStatusFilter === 'TODAS') return true;
@@ -637,14 +547,12 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     const isGeralView = currentStatusFilter !== 'FIRMADAS';
     
     let html = "";
-    let htmlMobile = "";
     let totVal = 0;
     let maiorAtraso = { texto: "-", valor: 0 };
     
     const totalOrcadoGeral = dadosOrdenados.reduce((acc, d) => acc + parseMoneyFlexible(d.content[COLS.VALOR]), 0);
 
     if (!isGeralView) {
-      // CABEÇALHO DESKTOP - FIRMADAS
       const labs = ["OBRA", "CLIENTE", "VALOR", "ITEM", "CATEGORIA", "STATUS DO PRAZO", "STATUS DE COMPRAS", ...ITENS, "OBSERVAÇÕES"];
       head.innerHTML = "<tr>" + labs.map(l => {
         const chave = mapaOrdenacaoCabecalho[l];
@@ -667,17 +575,14 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
         const detalhesJson = safeJsonParse(r[COLS.DETALHES_JSON], {});
 
-        // LINHA DESKTOP - FIRMADAS
         html += `<tr onclick="lidarCliqueLinha(${dO.originalIndex})">`;
         html += `<td>${r[COLS.OBRA] || ""}</td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:200px" title="${escapeHtml(r[COLS.CLIENTE])}">${escapeHtml(r[COLS.CLIENTE] || "")}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:200px" title="${r[COLS.CLIENTE]}">${r[COLS.CLIENTE] || ""}</div></td>`;
         html += `<td class="fw-semibold td-read-left">${formatMoneyBR(val)}</td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.ITEM_GERAL])}">${escapeHtml(r[COLS.ITEM_GERAL] || "-")}</div></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.CATEGORIA_GERAL])}">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.ITEM_GERAL]}">${r[COLS.ITEM_GERAL] || "-"}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.CATEGORIA_GERAL]}">${r[COLS.CATEGORIA_GERAL] || "-"}</div></td>`;
         html += `<td><span class="days-badge ${res.atraso ? "days-urgent" : "days-ok"} shadow-sm">${res.texto}</span></td>`;
         html += `<td><span class="days-badge ${resCompras.valor >= 100 ? "days-ok" : "days-urgent"} shadow-sm">${resCompras.texto}</span></td>`;
-
-        let miniBadgesMobile = "";
 
         for (let j = COLS.ITEM_INICIO; j <= COLS.ITEM_FIM; j++) {
           const c = String(r[j] || "").trim();
@@ -701,54 +606,14 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
           const conteudoCelula = isStatusDate(c) ? formatDateDisplayBR(c) : c;
           const tituloDetalhe = c === "?" ? (det.alerta_descricao || "Pendência registrada") : (det.descricao || "");
           html += `<td><span class="${cl}" title="${escapeHtml(tituloDetalhe)}">${conteudoCelula}${icon}</span></td>`;
-
-          // Cria os chips do Mobile
-          if(c !== "N/A" && c !== "") {
-              let mbClass = "mc-chip ";
-              if (c === "OK") mbClass += "mc-ok";
-              else if (c === "?") mbClass += "mc-qm";
-              else if (isStatusDate(c)) mbClass += "mc-dt";
-              
-              miniBadgesMobile += `<div class="${mbClass}"><span class="mc-chip-lbl">${nomeItem}</span><span class="mc-chip-val">${conteudoCelula}</span></div>`;
-          }
         }
 
         const obs = r[COLS.OBS] || "";
-        html += `<td><small class="text-muted d-inline-block text-truncate" style="max-width: 150px;" title="${escapeHtml(obs)}">${escapeHtml(obs)}</small></td>`;
+        html += `<td><small class="text-muted d-inline-block text-truncate" style="max-width: 150px;" title="${obs}">${obs}</small></td>`;
         html += `</tr>`;
-
-        // CARTÃO MOBILE - FIRMADAS
-        htmlMobile += `
-        <div class="mc-card animate-fade-up" onclick="lidarCliqueLinha(${dO.originalIndex})">
-            <div class="mc-header">
-                <div class="mc-obra-wrap">
-                    <i class="bi bi-folder2-open"></i>
-                    <span class="mc-obra-title">${escapeHtml(r[COLS.OBRA] || "")}</span>
-                </div>
-                <span class="days-badge ${res.atraso ? "days-urgent" : "days-ok"} shadow-sm">${res.texto}</span>
-            </div>
-            <div class="mc-body">
-                <div class="mc-client text-truncate">${escapeHtml(r[COLS.CLIENTE] || "Cliente não informado")}</div>
-                <div class="mc-category text-truncate">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div>
-                
-                <div class="mc-kpi-grid mt-2">
-                    <div class="mc-kpi">
-                        <span class="mc-kpi-lbl">Valor</span>
-                        <span class="mc-kpi-val text-primary">R$ ${formatMoneyBR(val)}</span>
-                    </div>
-                    <div class="mc-kpi">
-                        <span class="mc-kpi-lbl">Compras</span>
-                        <span class="mc-kpi-val ${resCompras.valor >= 100 ? "text-success" : "text-warning"}">${resCompras.texto}</span>
-                    </div>
-                </div>
-            </div>
-            ${miniBadgesMobile ? `<div class="mc-footer-scroll"><div class="mc-chips-container">${miniBadgesMobile}</div></div>` : ''}
-        </div>
-        `;
       });
 
     } else {
-      // CABEÇALHO DESKTOP - GERAL
       const isFrustrada = currentStatusFilter === 'FRUSTRADAS';
       const labs = ["ABERTURA", "OBRA", "CLIENTE", "STATUS", "ITEM", "CATEG. / SEGMENTO", "RESPONSÁVEL", "COMPLEX.", "UF", "ETAPA", "PRAZO", "NF", "VALOR", "% ORÇADO"];
       if (isFrustrada) labs.push("DATA FRUSTRADA");
@@ -767,85 +632,46 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
         totVal += val;
         
         const pctOrcado = totalOrcadoGeral > 0 ? ((val / totalOrcadoGeral) * 100).toFixed(1) + "%" : "0.0%";
-        const res = calcularPorcentagem(r);
-        const resCompras = calcularStatusComprasVirtual(r);
         
+        // Nova Lógica de Cores do Status Geral
         let statusBadgeClass = "days-badge shadow-sm ";
         const stProp = r[COLS.STATUS_PROPOSTA] || "";
-        if (stProp === 'FRUSTRADAS') statusBadgeClass += "days-urgent";        
-        else if (stProp === 'CONCLUIDAS' || stProp === 'ENTREGUES') statusBadgeClass += "days-ok"; 
-        else if (stProp === 'FIRMADAS') statusBadgeClass += "days-info";       
-        else if (stProp === 'ENVIADAS') statusBadgeClass += "days-warning";    
+        if (stProp === 'FRUSTRADAS') statusBadgeClass += "days-urgent";        // Vermelho
+        else if (stProp === 'CONCLUIDAS' || stProp === 'ENTREGUES') statusBadgeClass += "days-ok"; // Verde
+        else if (stProp === 'FIRMADAS') statusBadgeClass += "days-info";       // Azul
+        else if (stProp === 'ENVIADAS') statusBadgeClass += "days-warning";    // Laranja
         else statusBadgeClass += "bg-light text-secondary";
 
-        // LINHA DESKTOP - GERAL
         html += `<tr onclick="lidarCliqueLinha(${dO.originalIndex})">`;
         html += `<td>${formatDateDisplayBR(r[COLS.DATA_ABERTURA]) || '-'}</td>`;
-        html += `<td><strong>${escapeHtml(r[COLS.OBRA] || "")}</strong></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:180px" title="${escapeHtml(r[COLS.CLIENTE])}">${escapeHtml(r[COLS.CLIENTE] || "-")}</div></td>`;
+        html += `<td><strong>${r[COLS.OBRA] || ""}</strong></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:180px" title="${r[COLS.CLIENTE]}">${r[COLS.CLIENTE] || "-"}</div></td>`;
         html += `<td><span class="${statusBadgeClass}">${stProp || "-"}</span></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.ITEM_GERAL])}">${escapeHtml(r[COLS.ITEM_GERAL] || "-")}</div></td>`;
-        html += `<td class="td-read-left"><small class="fw-bold">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</small><br><small class="text-muted">${escapeHtml(r[COLS.SEGMENTO] || "-")}</small></td>`;
-        html += `<td>${escapeHtml(r[COLS.RESPONSAVEL] || "-")}</td>`;
-        html += `<td>${escapeHtml(r[COLS.COMPLEXIDADE] || "-")}</td>`;
-        html += `<td>${escapeHtml(r[COLS.UF] || "-")}</td>`;
-        html += `<td><div class="text-truncate" style="max-width:120px" title="${escapeHtml(r[COLS.ETAPA])}">${escapeHtml(r[COLS.ETAPA] || "-")}</div></td>`;
-        html += `<td>${escapeHtml(r[COLS.DIAS_PRAZO] || "-")}</td>`;
-        html += `<td>${escapeHtml(r[COLS.NF] || "-")}</td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.ITEM_GERAL]}">${r[COLS.ITEM_GERAL] || "-"}</div></td>`;
+        html += `<td class="td-read-left"><small class="fw-bold">${r[COLS.CATEGORIA_GERAL] || "-"}</small><br><small class="text-muted">${r[COLS.SEGMENTO] || "-"}</small></td>`;
+        html += `<td>${r[COLS.RESPONSAVEL] || "-"}</td>`;
+        html += `<td>${r[COLS.COMPLEXIDADE] || "-"}</td>`;
+        html += `<td>${r[COLS.UF] || "-"}</td>`;
+        html += `<td><div class="text-truncate" style="max-width:120px" title="${r[COLS.ETAPA]}">${r[COLS.ETAPA] || "-"}</div></td>`;
+        html += `<td>${r[COLS.DIAS_PRAZO] || "-"}</td>`;
+        html += `<td>${r[COLS.NF] || "-"}</td>`;
         html += `<td class="fw-semibold td-read-left">${formatMoneyBR(val)}</td>`;
         html += `<td class="fw-bold text-primary">${pctOrcado}</td>`;
+        
         if (isFrustrada) {
           html += `<td>${formatDateDisplayBR(r[COLS.DATA_FRUSTRADA]) || '-'}</td>`;
         }
         html += `</tr>`;
-
-        // CARTÃO MOBILE - GERAL (Com o Item de 3 palavras e ... )
-        let itemStr = String(r[COLS.ITEM_GERAL] || "").trim();
-        let words = itemStr.split(/\s+/);
-        let itemDisplay = words.length > 3 ? words.slice(0, 3).join(" ") + "..." : (itemStr || "-");
-
-        htmlMobile += `
-        <div class="mc-card animate-fade-up" onclick="lidarCliqueLinha(${dO.originalIndex})">
-            <div class="mc-header">
-                <div class="mc-obra-wrap">
-                    <i class="bi bi-folder2-open"></i>
-                    <span class="mc-obra-title">${escapeHtml(r[COLS.OBRA] || "")}</span>
-                </div>
-                <span class="${statusBadgeClass}">${stProp || "-"}</span>
-            </div>
-            <div class="mc-body">
-                <div class="mc-client text-truncate">${escapeHtml(r[COLS.CLIENTE] || "Cliente não informado")}</div>
-                <div class="mc-category text-truncate">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div>
-                
-                <div class="mc-kpi-grid mt-2">
-                    <div class="mc-kpi">
-                        <span class="mc-kpi-lbl">Abertura</span>
-                        <span class="mc-kpi-val">${formatDateDisplayBR(r[COLS.DATA_ABERTURA]) || '-'}</span>
-                    </div>
-                    <div class="mc-kpi">
-                        <span class="mc-kpi-lbl">Valor (${pctOrcado})</span>
-                        <span class="mc-kpi-val text-primary">R$ ${formatMoneyBR(val)}</span>
-                    </div>
-                    <div class="mc-kpi" style="grid-column: span 2;">
-                        <span class="mc-kpi-lbl">Item</span>
-                        <span class="mc-kpi-val text-truncate" style="max-width: 100%;" title="${escapeHtml(itemStr)}">${escapeHtml(itemDisplay)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        `;
       });
     }
 
     if (dados.length === 0) {
       body.innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><i class="bi bi-folder2-open d-block mb-2" style="font-size: 2rem;"></i>Nenhum registro encontrado nesta visualização.</td></tr>`;
-      if(mobileContainer) mobileContainer.innerHTML = `<div class="text-center py-5 text-muted"><i class="bi bi-folder2-open d-block mb-2" style="font-size: 3rem; opacity: 0.5;"></i><p>Nenhuma obra nesta visão.</p></div>`;
     } else {
       body.classList.remove('animate-fade-up');
       void body.offsetWidth;
       body.classList.add('animate-fade-up');
       requestAnimationFrame(() => { body.innerHTML = html; });
-      if(mobileContainer) mobileContainer.innerHTML = htmlMobile;
     }
 
     const custoMedio = dados.length > 0 ? (totVal / dados.length) : 0;
@@ -893,32 +719,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
         </div>
       </div>`;
     }).join('');
-  }
-
-  function carregar() {
-    document.getElementById('tabBody').innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">Conectando ao Supabase (ERP)...</span></td></tr>`;
-    
-    // CHAMADA ORIGINAL COM O FILTRO DE ANO ADICIONADO
-    callServer('sincronizarEFetch', [currentAnoFilter], data => {
-      if (!Array.isArray(data) || data.length === 0) { 
-        renderizar([]); 
-        return; 
-      }
-      dadosLocais = data.map((r, i) => ({ content: r, originalIndex: i }));
-      renderizar(dadosLocais.slice(1));
-    }, msg => {
-      if (msg === "motorbackend.js ausente.") return;
-      document.getElementById('tabBody').innerHTML = `
-        <tr><td colspan="20" class="text-center py-5 text-danger">
-          <i class="bi bi-database-x me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
-          <h5 class="fw-bold">Falha ao Ler a Tabela do ERP</h5>
-          <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
-            Motivo Retornado pelo Banco:<br>
-            <strong class="text-danger">${escapeHtml(msg)}</strong>
-          </span><br>
-        </td></tr>
-      `;
-    });
   }
 
   function atualizarResumoItem(id) {
@@ -977,6 +777,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     if (inputForn) inputForn.value = document.getElementById(`${id}_forn_val`).value;
     if (inputOc) inputOc.value = document.getElementById(`${id}_oc_val`).value;
     
+    // Mostra o valor limpo sem cêntimos infinitos no modal
     const vRaw = document.getElementById(`${id}_valor_val`).value;
     if (inputValor) inputValor.value = (vRaw !== "" && vRaw !== null) ? parseMoneyFlexible(vRaw).toFixed(2).replace('.00', '') : "";
     
@@ -1029,6 +830,33 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
       if (box) box.classList.add('expanded'); if (qDesc) qDesc.value = '';
     }
     atualizarResumoItem(id); if (id !== 'fatur') atualizarFaturamentoPrevistoFormulario();
+  }
+
+  function carregar() {
+    document.getElementById('tabBody').innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">Conectando ao Supabase (ERP)...</span></td></tr>`;
+    
+    callServer('sincronizarEFetch', [], data => {
+      if (!Array.isArray(data) || data.length === 0) { 
+        notify("Nenhuma obra encontrada na View do ERP."); 
+        renderizar([]); 
+        return; 
+      }
+      dadosLocais = data.map((r, i) => ({ content: r, originalIndex: i }));
+      renderizar(dadosLocais.slice(1));
+    }, msg => {
+      if (msg === "motorbackend.js ausente.") return;
+      notify("Erro de Conexão");
+      document.getElementById('tabBody').innerHTML = `
+        <tr><td colspan="20" class="text-center py-5 text-danger">
+          <i class="bi bi-database-x me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
+          <h5 class="fw-bold">Falha ao Ler a Tabela do ERP</h5>
+          <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
+            Motivo Retornado pelo Banco:<br>
+            <strong class="text-danger">${escapeHtml(msg)}</strong>
+          </span><br>
+        </td></tr>
+      `;
+    });
   }
 
   function limparCamposDetalhesItem(id) {
@@ -1084,6 +912,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     try {
       atualizarFaturamentoPrevistoFormulario();
       
+      // Limpa os valores monetários antes de salvar para o banco ficar perfeito
       const valorLimpo = document.getElementById('valor').value !== "" ? String(parseMoneyFlexible(document.getElementById('valor').value)) : "";
       
       const obj = { 
@@ -1123,6 +952,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     document.getElementById('obra').value = r[COLS.OBRA] || "";
     document.getElementById('cliente').value = r[COLS.CLIENTE] || ""; 
     
+    // Coloca os números visualmente limpos nos inputs de edição, tirando ".000000" do banco
     const rawValor = r[COLS.VALOR];
     document.getElementById('valor').value = (rawValor !== "" && rawValor !== null) ? parseMoneyFlexible(rawValor).toFixed(2).replace('.00', '') : "";
     
