@@ -238,6 +238,23 @@ body { background-color: var(--bg-light); font-family: 'Segoe UI', sans-serif; c
 .btn:active { transform: scale(0.97); }
 
 body.modal-open-blur #mainContent { filter: blur(6px); transition: 0.22s ease; }
+body.child-modal-open { overflow: hidden; }
+#corpoResumoGeral,
+.resumo-modal-scroll,
+#modalResumoGeral .geral-shell,
+#modalResumoGeral .finance-scroll-area,
+#modalResumoGeral .finance-table-shell,
+#modalResumoGeral .finance-headline-item,
+#modalResumoGeral .finance-insight-card,
+#modalResumoGeral .geral-card { min-width: 0; }
+
+#modalObra .modal-body,
+#modalCompraItem .modal-body,
+#modalPendenciaItem .modal-body,
+#modalResumoGeral .modal-body,
+#modalExtracaoRelatorio .modal-body {
+  overscroll-behavior: contain;
+}
 #notificationArea { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
 .custom-toast { background: var(--primary); color: white; padding: 12px 24px; border-radius: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 8px; animation: slideIn 0.3s ease forwards; }
 
