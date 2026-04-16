@@ -16,7 +16,7 @@ const motorBackend = {
   sincronizarEFetch: async function() {
     try {
       // 1. Conecta no servidor da empresa usando o Túnel Cloudflare (Seguro, HTTPS e Público)
-      const response = await fetch('https://thumbzilla-modern-refrigerator-simon.trycloudflare.com/api/carteira');
+      const response = await fetch('https://agrees-providence-promoted-shortly.trycloudflare.com/api/carteira');
       
       if (!response.ok) {
         throw new Error('Erro ao conectar no servidor. Verifique se o túnel e o motor estão rodando.');
