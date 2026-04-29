@@ -5,9 +5,303 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     STATUS_PROPOSTA: 22, DATA_ABERTURA: 23, SEGMENTO: 24, RESPONSAVEL: 25, COMPLEXIDADE: 26, UF: 27, ETAPA: 28, NF: 29, DATA_FRUSTRADA: 30, DATA_ENVIADA: 31, DATA_FATURAMENTO: 32
   });
   
-  let currentStatusFilter = 'FIRMADAS';
+  let currentStatusFilter = 'FIRMADAS'; // Original Intacto
+  let currentAnoFilter = '26'; 
+  let currentFaturamentoMesInicio = 'TODOS';
+  let currentFaturamentoMesFim = 'TODOS';
 
-  function setFilter(status) {
+  const MESES_FATURAMENTO = [
+    { valor: 1, label: 'Janeiro' },
+    { valor: 2, label: 'Fevereiro' },
+    { valor: 3, label: 'Março' },
+    { valor: 4, label: 'Abril' },
+    { valor: 5, label: 'Maio' },
+    { valor: 6, label: 'Junho' },
+    { valor: 7, label: 'Julho' },
+    { valor: 8, label: 'Agosto' },
+    { valor: 9, label: 'Setembro' },
+    { valor: 10, label: 'Outubro' },
+    { valor: 11, label: 'Novembro' },
+    { valor: 12, label: 'Dezembro' }
+  ];
+
+  function mudarAno(ano) {
+    const anoEfetivo = '26';
+    const houveTentativaDeTroca = Boolean(ano) && String(ano) !== anoEfetivo;
+
+    currentAnoFilter = anoEfetivo;
+    sincronizarAnoFixoNaInterface();
+
+    if (houveTentativaDeTroca) {
+      notify("<i class='bi bi-calendar-event me-2'></i> Nesta etapa, a carteira está isolada exclusivamente para 2026.");
+    }
+
+    carregar();
+  }
+
+  function getLimiteMesFiltroConcluidas() {
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth() + 1;
+    return Math.min(Math.max(mesAtual, 1), 12);
+  }
+
+  function normalizarMesFiltroConcluidas(valor) {
+    if (valor === null || valor === undefined || valor === '' || valor === 'TODOS') return 'TODOS';
+    const num = parseInt(String(valor), 10);
+    const limite = getLimiteMesFiltroConcluidas();
+    if (!Number.isFinite(num) || num < 1 || num > limite) return 'TODOS';
+    return String(num);
+  }
+
+  function preencherOpcoesFiltroConcluidas() {
+    const selects = [
+      document.getElementById('faturamentoMesInicio'),
+      document.getElementById('faturamentoMesFim')
+    ].filter(Boolean);
+
+    if (!selects.length) return;
+
+    const limite = getLimiteMesFiltroConcluidas();
+    const options = ['<option value="TODOS">Todo período</option>']
+      .concat(MESES_FATURAMENTO
+        .filter(m => m.valor <= limite)
+        .map(m => `<option value="${m.valor}">${m.label}</option>`))
+      .join('');
+
+    selects.forEach(select => {
+      const valorAtual = select.value;
+      select.innerHTML = options;
+      select.value = normalizarMesFiltroConcluidas(valorAtual);
+    });
+  }
+
+  function sincronizarFiltroConcluidasNaInterface() {
+    const inicioEl = document.getElementById('faturamentoMesInicio');
+    const fimEl = document.getElementById('faturamentoMesFim');
+    if (inicioEl) inicioEl.value = normalizarMesFiltroConcluidas(currentFaturamentoMesInicio);
+    if (fimEl) fimEl.value = normalizarMesFiltroConcluidas(currentFaturamentoMesFim);
+  }
+
+  function atualizarVisibilidadeFiltroConcluidas() {
+    const row = document.getElementById('filtroConcluidasFaturamento');
+    if (!row) return;
+    row.classList.toggle('d-none', currentStatusFilter !== 'CONCLUIDAS');
+  }
+
+  function aplicarFiltroConcluidasPorMes(origem) {
+    currentFaturamentoMesInicio = normalizarMesFiltroConcluidas(document.getElementById('faturamentoMesInicio')?.value);
+    currentFaturamentoMesFim = normalizarMesFiltroConcluidas(document.getElementById('faturamentoMesFim')?.value);
+
+    if (origem === 'inicio' && currentFaturamentoMesInicio !== 'TODOS' && currentFaturamentoMesFim === 'TODOS') {
+      currentFaturamentoMesFim = currentFaturamentoMesInicio;
+    }
+
+    if (origem === 'fim' && currentFaturamentoMesFim !== 'TODOS' && currentFaturamentoMesInicio === 'TODOS') {
+      currentFaturamentoMesInicio = currentFaturamentoMesFim;
+    }
+
+    if (currentFaturamentoMesInicio !== 'TODOS' && currentFaturamentoMesFim !== 'TODOS') {
+      const inicioNum = parseInt(currentFaturamentoMesInicio, 10);
+      const fimNum = parseInt(currentFaturamentoMesFim, 10);
+      if (inicioNum > fimNum) {
+        const temp = currentFaturamentoMesInicio;
+        currentFaturamentoMesInicio = currentFaturamentoMesFim;
+        currentFaturamentoMesFim = temp;
+      }
+    }
+
+    sincronizarFiltroConcluidasNaInterface();
+    renderizar(dadosLocais.slice(1));
+  }
+
+  function getRangeFiltroConcluidas() {
+    const limite = getLimiteMesFiltroConcluidas();
+    const inicio = currentFaturamentoMesInicio === 'TODOS' ? 1 : parseInt(currentFaturamentoMesInicio, 10);
+    const fim = currentFaturamentoMesFim === 'TODOS' ? limite : parseInt(currentFaturamentoMesFim, 10);
+
+    if (!Number.isFinite(inicio) || !Number.isFinite(fim)) return null;
+    return { inicio, fim };
+  }
+
+  function linhaConcluidaDentroDoPeriodo(row) {
+    if (currentStatusFilter !== 'CONCLUIDAS') return true;
+
+    const semFiltro = currentFaturamentoMesInicio === 'TODOS' && currentFaturamentoMesFim === 'TODOS';
+    if (semFiltro) return true;
+
+    const dataFat = parseDataUniversal(row[COLS.DATA_FATURAMENTO]);
+    if (!dataFat) return false;
+
+    const range = getRangeFiltroConcluidas();
+    if (!range) return true;
+
+    const mesLinha = dataFat.getMonth() + 1;
+    return mesLinha >= range.inicio && mesLinha <= range.fim;
+  }
+
+  function obterMetaConcluidasNF(row) {
+    const detalhes = safeJsonParse(row[COLS.DETALHES_JSON], {});
+    const lista = Array.isArray(detalhes.meta_concluidas_nf) ? detalhes.meta_concluidas_nf : [];
+    const docs = [];
+    const chaves = new Set();
+
+    lista.forEach(doc => {
+      const dataOriginal = String((doc && (doc.data_faturamento_original || doc.data_faturamento)) || '').trim();
+      const data = parseDataUniversal(dataOriginal);
+      const valor = parseMoneyFlexible(doc && doc.valor);
+      const nf = String((doc && doc.nf) || '').trim();
+
+      if (!data || valor <= 0) return;
+
+      const ano = String(data.getFullYear());
+      const mes = String(data.getMonth() + 1).padStart(2, '0');
+      const chaveDoc = `${nf}|${ano}-${mes}|${valor}`;
+
+      if (chaves.has(chaveDoc)) return;
+      chaves.add(chaveDoc);
+
+      docs.push({
+        nf,
+        valor,
+        item: String((doc && doc.item) || '').trim(),
+        categoria: String((doc && doc.categoria) || '').trim(),
+        dataFaturamentoOriginal: dataOriginal,
+        dataFaturamentoTimestamp: data.getTime(),
+        mesReferencia: `${ano}-${mes}`
+      });
+    });
+
+    return docs;
+  }
+
+  function obterMetaConcluidasPorMes(row) {
+    const detalhes = safeJsonParse(row[COLS.DETALHES_JSON], {});
+    const lista = Array.isArray(detalhes.meta_concluidas_por_mes) ? detalhes.meta_concluidas_por_mes : [];
+
+    return lista.map(grupo => {
+      const dataOriginal = String((grupo && (grupo.data_faturamento_original || grupo.data_faturamento)) || '').trim();
+      const data = parseDataUniversal(dataOriginal);
+      const detalhesNFs = Array.isArray(grupo && grupo.detalhes_nfs) ? grupo.detalhes_nfs : [];
+
+      return {
+        mesReferencia: String((grupo && grupo.mes_referencia) || '').trim(),
+        valorTotal: parseMoneyFlexible(grupo && grupo.valor_total),
+        item: String((grupo && grupo.item) || '').trim(),
+        categoria: String((grupo && grupo.categoria) || '').trim(),
+        nf: String((grupo && grupo.nf) || '').trim(),
+        dataFaturamentoOriginal: dataOriginal,
+        dataFaturamentoTimestamp: data ? data.getTime() : 0,
+        detalhesDocs: detalhesNFs.map(doc => ({
+          nf: String((doc && doc.nf) || '').trim(),
+          valor: parseMoneyFlexible(doc && doc.valor),
+          item: String((doc && doc.item) || '').trim(),
+          categoria: String((doc && doc.categoria) || '').trim(),
+          data_faturamento_original: String((doc && (doc.data_faturamento_original || doc.data_faturamento)) || '').trim(),
+          data_faturamento: String((doc && (doc.data_faturamento_original || doc.data_faturamento)) || '').trim()
+        }))
+      };
+    }).filter(grupo => grupo.mesReferencia && grupo.valorTotal > 0);
+  }
+
+  function agruparMetaConcluidasNFPorMes(docs) {
+    const grupos = new Map();
+
+    docs.forEach(doc => {
+      if (!grupos.has(doc.mesReferencia)) {
+        grupos.set(doc.mesReferencia, {
+          mesReferencia: doc.mesReferencia,
+          valorTotal: 0,
+          itens: new Set(),
+          categorias: new Set(),
+          nfs: new Set(),
+          detalhesDocs: [],
+          ultimoTimestamp: doc.dataFaturamentoTimestamp,
+          ultimaDataOriginal: doc.dataFaturamentoOriginal
+        });
+      }
+
+      const grupo = grupos.get(doc.mesReferencia);
+      grupo.valorTotal += parseMoneyFlexible(doc.valor);
+      if (doc.item) grupo.itens.add(doc.item);
+      if (doc.categoria) grupo.categorias.add(doc.categoria);
+      if (doc.nf) grupo.nfs.add(doc.nf);
+      grupo.detalhesDocs.push({
+        nf: doc.nf,
+        valor: parseMoneyFlexible(doc.valor),
+        item: doc.item,
+        categoria: doc.categoria,
+        data_faturamento_original: doc.dataFaturamentoOriginal,
+        data_faturamento: doc.dataFaturamentoOriginal
+      });
+
+      if (doc.dataFaturamentoTimestamp > grupo.ultimoTimestamp) {
+        grupo.ultimoTimestamp = doc.dataFaturamentoTimestamp;
+        grupo.ultimaDataOriginal = doc.dataFaturamentoOriginal;
+      }
+    });
+
+    return Array.from(grupos.values())
+      .sort((a, b) => a.ultimoTimestamp - b.ultimoTimestamp)
+      .map(grupo => ({
+        mesReferencia: grupo.mesReferencia,
+        valorTotal: grupo.valorTotal,
+        item: Array.from(grupo.itens).join(" / "),
+        categoria: Array.from(grupo.categorias).join(" / "),
+        nf: Array.from(grupo.nfs).join(" / "),
+        dataFaturamentoOriginal: grupo.ultimaDataOriginal,
+        dataFaturamentoTimestamp: grupo.ultimoTimestamp,
+        detalhesDocs: grupo.detalhesDocs
+      }));
+  }
+
+  function expandirLinhasConcluidasPorMes(dados) {
+    if (currentStatusFilter !== 'CONCLUIDAS') return dados.slice();
+
+    return dados.flatMap(item => {
+      const row = Array.isArray(item.content) ? item.content : [];
+      const docsValidos = obterMetaConcluidasNF(row);
+      if (docsValidos.length === 0) return [item];
+
+      const gruposMensais = agruparMetaConcluidasNFPorMes(docsValidos);
+      if (gruposMensais.length === 0) return [item];
+
+      const detalhesBase = safeJsonParse(row[COLS.DETALHES_JSON], {});
+      return gruposMensais.map(grupo => {
+        const rowClone = row.slice();
+
+        rowClone[COLS.VALOR] = parseMoneyFlexible(grupo.valorTotal);
+        rowClone[COLS.DATA_FATURAMENTO] = grupo.dataFaturamentoOriginal || "";
+        rowClone[COLS.ITEM_GERAL] = grupo.item || "-";
+        rowClone[COLS.CATEGORIA_GERAL] = grupo.categoria || "-";
+        rowClone[COLS.NF] = grupo.nf || "";
+        rowClone[COLS.OBS] = rowClone[COLS.OBS] || "";
+
+        const detalhesGrupo = Object.assign({}, detalhesBase, {
+          meta_concluidas_nf: grupo.detalhesDocs,
+          meta_concluidas_por_mes: [{
+            mes_referencia: grupo.mesReferencia,
+            valor_total: parseMoneyFlexible(grupo.valorTotal),
+            nf: grupo.nf || "",
+            item: grupo.item || "",
+            categoria: grupo.categoria || "",
+            data_faturamento_original: grupo.dataFaturamentoOriginal || "",
+            data_faturamento: grupo.dataFaturamentoOriginal || "",
+            detalhes_nfs: grupo.detalhesDocs
+          }]
+        });
+        rowClone[COLS.DETALHES_JSON] = JSON.stringify(detalhesGrupo);
+
+        return {
+          content: rowClone,
+          originalIndex: item.originalIndex,
+          renderKey: `${item.originalIndex}:${grupo.mesReferencia}`
+        };
+      });
+    });
+  }
+
+
+function setFilter(status) {
     currentStatusFilter = status;
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.classList.remove('active');
@@ -15,6 +309,12 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
         btn.classList.add('active');
       }
     });
+    const selectEl = document.getElementById('statusFilter');
+    if (selectEl && selectEl.value !== status) {
+      selectEl.value = status;
+    }
+    atualizarVisibilidadeFiltroConcluidas();
+    sincronizarFiltroConcluidasNaInterface();
     renderizar(dadosLocais.slice(1));
   }
 
@@ -76,16 +376,11 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
             <i class="bi bi-file-earmark-x text-danger d-block mb-3" style="font-size: 3.5rem;"></i>
             <h4 class="text-danger fw-bold">ARQUIVO DO MOTOR NÃO ENCONTRADO</h4>
             <p class="text-muted mt-2">O navegador tentou ligar o motor do Supabase, mas o arquivo não foi carregado.</p>
-            <div class="text-start d-inline-block bg-light p-3 rounded border mt-3 shadow-sm">
-              <strong>O que você deve fazer agora:</strong><br><br>
-              1. Vá na sua pasta do Windows.<br>
-              2. Tem um arquivo lá chamado <strong>motorbackand</strong> (com a letra A).<br>
-              3. Renomeie ele para <strong>motorbackend.js</strong> (com a letra E).<br>
-              4. Depois de renomear, volte aqui e aperte F5.
-            </div>
           </div>
         `;
         document.getElementById('tabBody').innerHTML = `<tr><td colspan="20">${diagHtml}</td></tr>`;
+        const mobileContainer = document.getElementById('mobileCardsContainer');
+        if (mobileContainer) mobileContainer.innerHTML = `<div class="text-center py-5 text-danger px-3">${diagHtml}</div>`;
         finalizeError(`motorbackend.js ausente.`);
         return;
       }
@@ -171,17 +466,24 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     return `${dia}/${mes}/${ano}`;
   }
 
-  function sanitizeMoneyText(value) { return String(value || "").trim(); }
+  function formatPrazoDisplay(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "-";
+
+    if (value instanceof Date || isStatusDate(raw) || /^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+      return formatDateDisplayBR(raw) || raw;
+    }
+
+    return raw;
+  }
 
   function sanitizeInteger(value) {
     const num = parseInt(String(value || "").trim(), 10);
     return Number.isFinite(num) && num >= 0 ? String(num) : "";
   }
 
-  // ==== NOVO MOTOR DE CONVERSÃO FINANCEIRA (100% BLINDADO) ====
   function parseMoneyFlexible(value) {
     if (value === null || value === undefined || value === '') return 0;
-    // Se o valor já for número limpo do banco (ex: 2292.152), usa direto!
     if (typeof value === 'number') return value;
 
     let str = String(value).trim();
@@ -189,16 +491,13 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
     str = str.replace(/\s/g, '').replace(/[R$r$\u00A0]/g, '');
 
-    // Se o usuário digitou com vírgula, garante que é o formato Brasileiro
     if (str.includes(',')) {
       str = str.replace(/\./g, '').replace(',', '.');
     } else {
-      // Se não tem vírgula, e tem mais de um ponto (ex: 2.000.000), os pontos são milhares
       const dotCount = (str.match(/\./g) || []).length;
       if (dotCount > 1) {
         str = str.replace(/\./g, '');
       }
-      // Se tiver apenas 1 ponto (ex: "2292.15200"), mantém o ponto, pois é o formato padrão do DB.
     }
 
     str = str.replace(/[^\d.-]/g, '');
@@ -208,7 +507,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
   function formatMoneyBR(value) {
     const num = parseMoneyFlexible(value);
-    // Garantia de não exibir centavos e formatar com os pontos visualmente corretos
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
@@ -275,6 +573,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   }
 
   let dadosLocais = [];
+  let linhasRenderizadasAtuais = [];
   let estadoOrdenacao = { key: "", dir: "asc" };
   const mapaOrdenacaoCabecalho = {
     "OBRA": "obra",
@@ -286,6 +585,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     "STATUS DE COMPRAS": "compras",
     "FATUR.": "fatur",
     "ABERTURA": "abertura",
+    "FATURAMENTO": "abertura",
     "STATUS": "status",
     "RESPONSÁVEL": "responsavel",
     "COMPLEX.": "complexidade",
@@ -445,7 +745,11 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
       } 
       else if (chave === 'compras') { valorA = calcularStatusComprasVirtual(rA).valor; valorB = calcularStatusComprasVirtual(rB).valor; } 
       else if (chave === 'fatur') { valorA = parseStatusDateValue(rA[COLS.ITEM_FIM]) ?? -1; valorB = parseStatusDateValue(rB[COLS.ITEM_FIM]) ?? -1; }
-      else if (chave === 'abertura') { valorA = parseStatusDateValue(rA[COLS.DATA_ABERTURA]) ?? -1; valorB = parseStatusDateValue(rB[COLS.DATA_ABERTURA]) ?? -1; }
+      else if (chave === 'abertura') {
+        const indiceDataBase = currentStatusFilter === 'CONCLUIDAS' ? COLS.DATA_FATURAMENTO : COLS.DATA_ABERTURA;
+        valorA = parseStatusDateValue(rA[indiceDataBase]) ?? -1;
+        valorB = parseStatusDateValue(rB[indiceDataBase]) ?? -1;
+      }
       else if (chave === 'status') { valorA = String(rA[COLS.STATUS_PROPOSTA] || '').trim(); valorB = String(rB[COLS.STATUS_PROPOSTA] || '').trim(); }
       else if (chave === 'responsavel') { valorA = String(rA[COLS.RESPONSAVEL] || '').trim(); valorB = String(rB[COLS.RESPONSAVEL] || '').trim(); }
       else if (chave === 'complexidade') { valorA = String(rA[COLS.COMPLEXIDADE] || '').trim(); valorB = String(rB[COLS.COMPLEXIDADE] || '').trim(); }
@@ -471,61 +775,162 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     }
   }
 
-  function abrirResumoProposta(idx) {
-    const r = dadosLocais[idx].content;
-    const obra = r[COLS.OBRA] || "";
-    const status = r[COLS.STATUS_PROPOSTA] || "-";
-    const valor = parseMoneyFlexible(r[COLS.VALOR]);
-    
-    const infoPrincipal = [
-      { icon: "bi-folder2-open", label: "Obra", valor: obra },
-      { icon: "bi-building", label: "Cliente", valor: r[COLS.CLIENTE] || "-" },
-      { icon: "bi-box-seam", label: "Item", valor: r[COLS.ITEM_GERAL] || "-" },
-      { icon: "bi-tags", label: "Categoria", valor: r[COLS.CATEGORIA_GERAL] || "-" },
-      { icon: "bi-person", label: "Responsável", valor: r[COLS.RESPONSAVEL] || "-" },
-      { icon: "bi-bar-chart", label: "Complexidade", valor: r[COLS.COMPLEXIDADE] || "-" }
-    ];
+  function abrirLinhaRenderizada(idxRender) {
+    const registro = linhasRenderizadasAtuais[idxRender];
+    if (!registro || !Array.isArray(registro.content)) return;
 
-    const infoComplementar = [
-      { icon: "bi-calendar-event", label: "Data Abertura", valor: formatDateDisplayBR(r[COLS.DATA_ABERTURA]) || "-" },
-      { icon: "bi-geo-alt", label: "UF", valor: r[COLS.UF] || "-" },
-      { icon: "bi-diagram-3", label: "Etapa", valor: r[COLS.ETAPA] || "-" }
-    ];
+    const r = registro.content;
+    const status = String(r[COLS.STATUS_PROPOSTA] || '').trim();
 
-    if (status === 'ENVIADAS') {
-       infoComplementar.push({ icon: "bi-send", label: "Data Enviada", valor: formatDateDisplayBR(r[COLS.DATA_ENVIADA]) || "-" });
-    } else if (status === 'FRUSTRADAS') {
-       infoComplementar.push({ icon: "bi-calendar-x", label: "Data Frustrada", valor: formatDateDisplayBR(r[COLS.DATA_FRUSTRADA]) || "-" });
-    } else if (status === 'CONCLUIDAS' || status === 'ENTREGUES') {
-       infoComplementar.push({ icon: "bi-calendar-check", label: "Data Faturamento", valor: formatDateDisplayBR(r[COLS.DATA_FATURAMENTO]) || "-" });
-       infoComplementar.push({ icon: "bi-receipt", label: "NF", valor: r[COLS.NF] || "-" });
+    if (status === 'FIRMADAS' && Number.isInteger(registro.originalIndex) && dadosLocais[registro.originalIndex]) {
+      editar(registro.originalIndex);
+      return;
     }
 
-    const montarCards = (arr) => arr.map(d => `<div class="geral-card"><div class="geral-card-label"><i class="bi ${d.icon} me-1"></i>${d.label}</div><div class="geral-card-value">${d.valor}</div></div>`).join('');
+    abrirResumoPropostaConteudo(r);
+  }
+
+  function abrirResumoProposta(idx) {
+    if (!dadosLocais[idx] || !Array.isArray(dadosLocais[idx].content)) return;
+    abrirResumoPropostaConteudo(dadosLocais[idx].content);
+  }
+
+  function abrirResumoPropostaConteudo(r) {
+    const obra = String(r[COLS.OBRA] || "").trim();
+    const status = String(r[COLS.STATUS_PROPOSTA] || "-").trim() || "-";
+    const valor = parseMoneyFlexible(r[COLS.VALOR]);
+    const cliente = String(r[COLS.CLIENTE] || "-").trim() || "-";
+    const item = String(r[COLS.ITEM_GERAL] || "-").trim() || "-";
+    const categoria = String(r[COLS.CATEGORIA_GERAL] || "-").trim() || "-";
+    const responsavel = String(r[COLS.RESPONSAVEL] || "-").trim() || "-";
+    const complexidade = String(r[COLS.COMPLEXIDADE] || "-").trim() || "-";
+    const uf = String(r[COLS.UF] || "").trim();
+    const etapa = String(r[COLS.ETAPA] || "-").trim() || "-";
+    const nf = String(r[COLS.NF] || "-").trim() || "-";
+    const observacoes = String(r[COLS.OBS] || "").trim();
+
+    const mapaUF = {
+      AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará", DF: "Distrito Federal",
+      ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão", MT: "Mato Grosso", MS: "Mato Grosso do Sul", MG: "Minas Gerais",
+      PA: "Pará", PB: "Paraíba", PR: "Paraná", PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte",
+      RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima", SC: "Santa Catarina", SP: "São Paulo", SE: "Sergipe", TO: "Tocantins"
+    };
+
+    const ufNormalizada = uf.toUpperCase();
+    const localizacao = ufNormalizada
+      ? (mapaUF[ufNormalizada] ? `${mapaUF[ufNormalizada]} (${ufNormalizada})` : ufNormalizada)
+      : "UF não informada";
+
+    const statusConfig = {
+      ENVIADAS: { chip: "is-info", label: "ENVIADA", icon: "bi-send-check" },
+      FRUSTRADAS: { chip: "is-danger", label: "FRUSTRADA", icon: "bi-x-octagon" },
+      CONCLUIDAS: { chip: "is-success", label: "CONCLUÍDA", icon: "bi-check-circle" },
+      ENTREGUES: { chip: "is-success", label: "ENTREGUE", icon: "bi-truck" },
+      FIRMADAS: { chip: "is-primary", label: "FIRMADA", icon: "bi-award" }
+    };
+
+    const statusMeta = statusConfig[status] || { chip: "is-neutral", label: status || "NÃO INFORMADO", icon: "bi-info-circle" };
+
+    const dataAbertura = formatDateDisplayBR(r[COLS.DATA_ABERTURA]) || "-";
+    let dataSecundariaLabel = "Atualização";
+    let dataSecundariaValor = "-";
+
+    if (status === 'ENVIADAS') {
+      dataSecundariaLabel = 'Envio';
+      dataSecundariaValor = formatDateDisplayBR(r[COLS.DATA_ENVIADA]) || '-';
+    } else if (status === 'FRUSTRADAS') {
+      dataSecundariaLabel = 'Frustração';
+      dataSecundariaValor = formatDateDisplayBR(r[COLS.DATA_FRUSTRADA]) || '-';
+    } else if (status === 'CONCLUIDAS' || status === 'ENTREGUES') {
+      dataSecundariaLabel = 'Faturamento';
+      dataSecundariaValor = formatDateDisplayBR(r[COLS.DATA_FATURAMENTO]) || '-';
+    }
+
+    const registros = [];
+    if (nf && nf !== '-') registros.push(`<p><strong>NF(s) emitidas:</strong> ${escapeHtml(nf)}</p>`);
+    if (item && item !== '-') registros.push(`<p><strong>Itens atrelados no ERP:</strong> ${escapeHtml(item)}</p>`);
+    if (etapa && etapa !== '-') registros.push(`<p><strong>Etapa registrada:</strong> ${escapeHtml(etapa)}</p>`);
+    if (observacoes) registros.push(`<p><strong>Observações:</strong> ${escapeHtml(observacoes)}</p>`);
+    if (!registros.length) {
+      registros.push(`<p><strong>Registros:</strong> Não há observações adicionais retornadas pelo ERP para esta obra.</p>`);
+    }
 
     const html = `
-      <div class="resumo-modal-scroll">
-        <div class="geral-shell">
-          <section class="geral-section">
-            <h6 class="geral-section-title"><i class="bi bi-layout-text-window-reverse"></i> Dados da Proposta (${status})</h6>
-            <div class="geral-grid">
-              ${montarCards(infoPrincipal)}
+      <div class="proposta-consulta-page">
+        <section class="proposta-consulta-hero">
+          <article class="proposta-hero-card proposta-hero-card-main">
+            <span class="proposta-obra-badge">OBRA #${escapeHtml(obra || '-')}</span>
+            <h2>${escapeHtml(cliente)}</h2>
+            <div class="proposta-hero-location"><i class="bi bi-geo-alt"></i><span>${escapeHtml(localizacao)}</span></div>
+            <div class="proposta-chip-row">
+              <span class="proposta-chip ${statusMeta.chip}"><i class="bi ${statusMeta.icon}"></i>${escapeHtml(statusMeta.label)}</span>
+              <span class="proposta-chip"><i class="bi bi-tag"></i>${escapeHtml(categoria)}</span>
             </div>
-          </section>
-          <section class="geral-section">
-            <h6 class="geral-section-title"><i class="bi bi-info-circle"></i> Situação e Datas</h6>
-            <div class="geral-grid">
-              ${montarCards(infoComplementar)}
+          </article>
+        </section>
+
+        <section class="proposta-consulta-value-row">
+          <article class="proposta-hero-card proposta-hero-card-value">
+            <span>VALOR DA PROPOSTA</span>
+            <strong>R$ ${formatMoneyBR(valor)}</strong>
+          </article>
+        </section>
+
+        <section class="proposta-consulta-grid">
+          <article class="proposta-panel">
+            <header class="proposta-panel-head">
+              <div class="proposta-panel-title"><i class="bi bi-box-seam"></i><span>DETALHES DO EQUIPAMENTO</span></div>
+            </header>
+            <div class="proposta-panel-body proposta-panel-body-stack">
+              <div class="proposta-field-block">
+                <span>DESCRIÇÃO DO ITEM</span>
+                <div class="proposta-field-highlight">${escapeHtml(item)}</div>
+              </div>
+              <div class="proposta-info-list">
+                <div class="proposta-info-item">
+                  <span class="proposta-info-icon"><i class="bi bi-person"></i></span>
+                  <div>
+                    <small>RESPONSÁVEL TÉCNICO</small>
+                    <strong>${escapeHtml(responsavel)}</strong>
+                  </div>
+                </div>
+              </div>
             </div>
-          </section>
-          <section class="geral-section">
-            <h6 class="geral-section-title"><i class="bi bi-wallet2"></i> Visão Financeira</h6>
-            <div class="geral-card geral-total-card">
-              <div class="geral-card-label"><i class="bi bi-currency-dollar me-1"></i>Valor da Proposta</div>
-              <div class="geral-card-value money">${formatMoneyBR(valor)}</div>
+          </article>
+
+          <article class="proposta-panel">
+            <header class="proposta-panel-head">
+              <div class="proposta-panel-title"><i class="bi bi-clock-history"></i><span>PRAZOS &amp; DOCUMENTAÇÃO</span></div>
+            </header>
+            <div class="proposta-panel-body proposta-panel-body-stack">
+              <div class="proposta-mini-grid">
+                <div class="proposta-mini-card">
+                  <span><i class="bi bi-calendar-event"></i>ABERTURA</span>
+                  <strong>${escapeHtml(dataAbertura)}</strong>
+                </div>
+                <div class="proposta-mini-card">
+                  <span><i class="bi bi-calendar-check"></i>${escapeHtml(dataSecundariaLabel.toUpperCase())}</span>
+                  <strong>${escapeHtml(dataSecundariaValor)}</strong>
+                </div>
+              </div>
+              <div class="proposta-mini-card proposta-mini-card-single">
+                <span><i class="bi bi-receipt-cutoff"></i>NOTA FISCAL VINCULADA</span>
+                <strong>${escapeHtml(nf)}</strong>
+              </div>
             </div>
-          </section>
-        </div>
+          </article>
+        </section>
+
+        <article class="proposta-panel proposta-panel-full">
+          <header class="proposta-panel-head">
+            <div class="proposta-panel-title"><i class="bi bi-journal-text"></i><span>REGISTROS E OBSERVAÇÕES DO ERP</span></div>
+          </header>
+          <div class="proposta-panel-body">
+            <div class="proposta-note-box">
+              ${registros.join('')}
+            </div>
+          </div>
+        </article>
       </div>
     `;
 
@@ -537,23 +942,35 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
   function renderizar(dadosOriginais) {
     const head = document.getElementById('tabHead');
     const body = document.getElementById('tabBody');
+    const mobileContainer = document.getElementById('mobileCardsContainer');
 
-    const dados = dadosOriginais.filter(d => {
+    atualizarVisibilidadeFiltroConcluidas();
+    sincronizarFiltroConcluidasNaInterface();
+
+    const dadosFiltradosStatus = dadosOriginais.filter(d => {
       if (currentStatusFilter === 'TODAS') return true;
       return d.content[COLS.STATUS_PROPOSTA] === currentStatusFilter;
     });
 
+    const dadosPreparados = currentStatusFilter === 'CONCLUIDAS'
+      ? expandirLinhasConcluidasPorMes(dadosFiltradosStatus)
+      : dadosFiltradosStatus.slice();
+
+    const dados = dadosPreparados.filter(d => linhaConcluidaDentroDoPeriodo(d.content));
     const dadosOrdenados = ordenarDados(dados);
+    linhasRenderizadasAtuais = dadosOrdenados.slice();
     const isGeralView = currentStatusFilter !== 'FIRMADAS';
     
     let html = "";
+    let htmlMobile = "";
     let totVal = 0;
     let maiorAtraso = { texto: "-", valor: 0 };
     
     const totalOrcadoGeral = dadosOrdenados.reduce((acc, d) => acc + parseMoneyFlexible(d.content[COLS.VALOR]), 0);
 
     if (!isGeralView) {
-      const labs = ["OBRA", "CLIENTE", "VALOR", "ITEM", "CATEGORIA", "STATUS DO PRAZO", "STATUS DE COMPRAS", ...ITENS, "OBSERVAÇÕES"];
+      // CABEÇALHO DESKTOP - FIRMADAS
+      const labs = ["OBRA", "VALOR", "CLIENTE", "ITEM", "CATEGORIA", "STATUS DO PRAZO", "STATUS DE COMPRAS", ...ITENS, "OBSERVAÇÕES"];
       head.innerHTML = "<tr>" + labs.map(l => {
         const chave = mapaOrdenacaoCabecalho[l];
         const ativo = chave && estadoOrdenacao.key === chave ? 'is-active' : '';
@@ -562,7 +979,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
           : `<th><span class="table-head-label">${l}</span></th>`;
       }).join('') + "</tr>";
 
-      dadosOrdenados.forEach(dO => {
+      dadosOrdenados.forEach((dO, renderIdx) => {
         const r = Array.isArray(dO.content) ? dO.content : [];
         const val = parseMoneyFlexible(r[COLS.VALOR]);
         const res = calcularPorcentagem(r);
@@ -575,14 +992,17 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
 
         const detalhesJson = safeJsonParse(r[COLS.DETALHES_JSON], {});
 
-        html += `<tr onclick="lidarCliqueLinha(${dO.originalIndex})">`;
+        // LINHA DESKTOP - FIRMADAS
+        html += `<tr onclick="abrirLinhaRenderizada(${renderIdx})">`;
         html += `<td>${r[COLS.OBRA] || ""}</td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:200px" title="${r[COLS.CLIENTE]}">${r[COLS.CLIENTE] || ""}</div></td>`;
         html += `<td class="fw-semibold td-read-left">${formatMoneyBR(val)}</td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.ITEM_GERAL]}">${r[COLS.ITEM_GERAL] || "-"}</div></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.CATEGORIA_GERAL]}">${r[COLS.CATEGORIA_GERAL] || "-"}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:200px" title="${escapeHtml(r[COLS.CLIENTE])}">${escapeHtml(r[COLS.CLIENTE] || "")}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.ITEM_GERAL])}">${escapeHtml(r[COLS.ITEM_GERAL] || "-")}</div></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.CATEGORIA_GERAL])}">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div></td>`;
         html += `<td><span class="days-badge ${res.atraso ? "days-urgent" : "days-ok"} shadow-sm">${res.texto}</span></td>`;
         html += `<td><span class="days-badge ${resCompras.valor >= 100 ? "days-ok" : "days-urgent"} shadow-sm">${resCompras.texto}</span></td>`;
+
+        let miniBadgesMobile = "";
 
         for (let j = COLS.ITEM_INICIO; j <= COLS.ITEM_FIM; j++) {
           const c = String(r[j] || "").trim();
@@ -606,16 +1026,59 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
           const conteudoCelula = isStatusDate(c) ? formatDateDisplayBR(c) : c;
           const tituloDetalhe = c === "?" ? (det.alerta_descricao || "Pendência registrada") : (det.descricao || "");
           html += `<td><span class="${cl}" title="${escapeHtml(tituloDetalhe)}">${conteudoCelula}${icon}</span></td>`;
+
+          // Cria os chips do Mobile
+          if(c !== "N/A" && c !== "") {
+              let mbClass = "mc-chip ";
+              if (c === "OK") mbClass += "mc-ok";
+              else if (c === "?") mbClass += "mc-qm";
+              else if (isStatusDate(c)) mbClass += "mc-dt";
+              
+              miniBadgesMobile += `<div class="${mbClass}"><span class="mc-chip-lbl">${nomeItem}</span><span class="mc-chip-val">${conteudoCelula}</span></div>`;
+          }
         }
 
         const obs = r[COLS.OBS] || "";
-        html += `<td><small class="text-muted d-inline-block text-truncate" style="max-width: 150px;" title="${obs}">${obs}</small></td>`;
+        html += `<td><small class="text-muted d-inline-block text-truncate" style="max-width: 150px;" title="${escapeHtml(obs)}">${escapeHtml(obs)}</small></td>`;
         html += `</tr>`;
+
+        // CARTÃO MOBILE - FIRMADAS
+        htmlMobile += `
+        <div class="mc-card animate-fade-up" onclick="abrirLinhaRenderizada(${renderIdx})">
+            <div class="mc-header">
+                <div class="mc-obra-wrap">
+                    <i class="bi bi-folder2-open"></i>
+                    <span class="mc-obra-title">${escapeHtml(r[COLS.OBRA] || "")}</span>
+                </div>
+                <span class="days-badge ${res.atraso ? "days-urgent" : "days-ok"} shadow-sm">${res.texto}</span>
+            </div>
+            <div class="mc-body">
+                <div class="mc-client text-truncate">${escapeHtml(r[COLS.CLIENTE] || "Cliente não informado")}</div>
+                <div class="mc-category text-truncate">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div>
+                
+                <div class="mc-kpi-grid mt-2">
+                    <div class="mc-kpi">
+                        <span class="mc-kpi-lbl">Valor</span>
+                        <span class="mc-kpi-val text-primary">R$ ${formatMoneyBR(val)}</span>
+                    </div>
+                    <div class="mc-kpi">
+                        <span class="mc-kpi-lbl">Compras</span>
+                        <span class="mc-kpi-val ${resCompras.valor >= 100 ? "text-success" : "text-warning"}">${resCompras.texto}</span>
+                    </div>
+                </div>
+            </div>
+            ${miniBadgesMobile ? `<div class="mc-footer-scroll"><div class="mc-chips-container">${miniBadgesMobile}</div></div>` : ''}
+        </div>
+        `;
       });
 
     } else {
+      // CABEÇALHO DESKTOP - GERAL
       const isFrustrada = currentStatusFilter === 'FRUSTRADAS';
-      const labs = ["ABERTURA", "OBRA", "CLIENTE", "STATUS", "ITEM", "CATEG. / SEGMENTO", "RESPONSÁVEL", "COMPLEX.", "UF", "ETAPA", "PRAZO", "NF", "VALOR", "% ORÇADO"];
+      const isConcluida = currentStatusFilter === 'CONCLUIDAS';
+      const labelPrimeiraColunaGeral = isConcluida ? "FATURAMENTO" : "ABERTURA";
+      const indicePrimeiraDataGeral = isConcluida ? COLS.DATA_FATURAMENTO : COLS.DATA_ABERTURA;
+      const labs = [labelPrimeiraColunaGeral, "OBRA", "VALOR", "CLIENTE", "STATUS", "ITEM", "CATEG. / SEGMENTO", "RESPONSÁVEL", "COMPLEX.", "UF", "ETAPA", "PRAZO", "NF", "% ORÇADO"];
       if (isFrustrada) labs.push("DATA FRUSTRADA");
 
       head.innerHTML = "<tr>" + labs.map(l => {
@@ -626,52 +1089,92 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
           : `<th><span class="table-head-label">${l}</span></th>`;
       }).join('') + "</tr>";
 
-      dadosOrdenados.forEach(dO => {
+      dadosOrdenados.forEach((dO, renderIdx) => {
         const r = Array.isArray(dO.content) ? dO.content : [];
         const val = parseMoneyFlexible(r[COLS.VALOR]);
         totVal += val;
         
         const pctOrcado = totalOrcadoGeral > 0 ? ((val / totalOrcadoGeral) * 100).toFixed(1) + "%" : "0.0%";
+        const res = calcularPorcentagem(r);
+        const resCompras = calcularStatusComprasVirtual(r);
         
-        // Nova Lógica de Cores do Status Geral
         let statusBadgeClass = "days-badge shadow-sm ";
         const stProp = r[COLS.STATUS_PROPOSTA] || "";
-        if (stProp === 'FRUSTRADAS') statusBadgeClass += "days-urgent";        // Vermelho
-        else if (stProp === 'CONCLUIDAS' || stProp === 'ENTREGUES') statusBadgeClass += "days-ok"; // Verde
-        else if (stProp === 'FIRMADAS') statusBadgeClass += "days-info";       // Azul
-        else if (stProp === 'ENVIADAS') statusBadgeClass += "days-warning";    // Laranja
+        if (stProp === 'FRUSTRADAS') statusBadgeClass += "days-urgent";        
+        else if (stProp === 'CONCLUIDAS' || stProp === 'ENTREGUES') statusBadgeClass += "days-ok"; 
+        else if (stProp === 'FIRMADAS') statusBadgeClass += "days-info";       
+        else if (stProp === 'ENVIADAS') statusBadgeClass += "days-warning";    
         else statusBadgeClass += "bg-light text-secondary";
 
-        html += `<tr onclick="lidarCliqueLinha(${dO.originalIndex})">`;
-        html += `<td>${formatDateDisplayBR(r[COLS.DATA_ABERTURA]) || '-'}</td>`;
-        html += `<td><strong>${r[COLS.OBRA] || ""}</strong></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:180px" title="${r[COLS.CLIENTE]}">${r[COLS.CLIENTE] || "-"}</div></td>`;
-        html += `<td><span class="${statusBadgeClass}">${stProp || "-"}</span></td>`;
-        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${r[COLS.ITEM_GERAL]}">${r[COLS.ITEM_GERAL] || "-"}</div></td>`;
-        html += `<td class="td-read-left"><small class="fw-bold">${r[COLS.CATEGORIA_GERAL] || "-"}</small><br><small class="text-muted">${r[COLS.SEGMENTO] || "-"}</small></td>`;
-        html += `<td>${r[COLS.RESPONSAVEL] || "-"}</td>`;
-        html += `<td>${r[COLS.COMPLEXIDADE] || "-"}</td>`;
-        html += `<td>${r[COLS.UF] || "-"}</td>`;
-        html += `<td><div class="text-truncate" style="max-width:120px" title="${r[COLS.ETAPA]}">${r[COLS.ETAPA] || "-"}</div></td>`;
-        html += `<td>${r[COLS.DIAS_PRAZO] || "-"}</td>`;
-        html += `<td>${r[COLS.NF] || "-"}</td>`;
+        // LINHA DESKTOP - GERAL
+        html += `<tr onclick="abrirLinhaRenderizada(${renderIdx})">`;
+        html += `<td>${formatDateDisplayBR(r[indicePrimeiraDataGeral]) || '-'}</td>`;
+        html += `<td><strong>${escapeHtml(r[COLS.OBRA] || "")}</strong></td>`;
         html += `<td class="fw-semibold td-read-left">${formatMoneyBR(val)}</td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:180px" title="${escapeHtml(r[COLS.CLIENTE])}">${escapeHtml(r[COLS.CLIENTE] || "-")}</div></td>`;
+        html += `<td><span class="${statusBadgeClass}">${stProp || "-"}</span></td>`;
+        html += `<td class="td-read-left"><div class="text-truncate" style="max-width:150px" title="${escapeHtml(r[COLS.ITEM_GERAL])}">${escapeHtml(r[COLS.ITEM_GERAL] || "-")}</div></td>`;
+        html += `<td class="td-read-left"><small class="fw-bold">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</small><br><small class="text-muted">${escapeHtml(r[COLS.SEGMENTO] || "-")}</small></td>`;
+        html += `<td>${escapeHtml(r[COLS.RESPONSAVEL] || "-")}</td>`;
+        html += `<td>${escapeHtml(r[COLS.COMPLEXIDADE] || "-")}</td>`;
+        html += `<td>${escapeHtml(r[COLS.UF] || "-")}</td>`;
+        html += `<td><div class="text-truncate" style="max-width:120px" title="${escapeHtml(r[COLS.ETAPA])}">${escapeHtml(r[COLS.ETAPA] || "-")}</div></td>`;
+        html += `<td>${escapeHtml(formatPrazoDisplay(r[COLS.DIAS_PRAZO]))}</td>`;
+        html += `<td>${escapeHtml(r[COLS.NF] || "-")}</td>`;
         html += `<td class="fw-bold text-primary">${pctOrcado}</td>`;
-        
         if (isFrustrada) {
           html += `<td>${formatDateDisplayBR(r[COLS.DATA_FRUSTRADA]) || '-'}</td>`;
         }
         html += `</tr>`;
+
+        // CARTÃO MOBILE - GERAL (Com o Item de 3 palavras e ... )
+        let itemStr = String(r[COLS.ITEM_GERAL] || "").trim();
+        let words = itemStr.split(/\s+/);
+        let itemDisplay = words.length > 3 ? words.slice(0, 3).join(" ") + "..." : (itemStr || "-");
+
+        htmlMobile += `
+        <div class="mc-card animate-fade-up" onclick="abrirLinhaRenderizada(${renderIdx})">
+            <div class="mc-header">
+                <div class="mc-obra-wrap">
+                    <i class="bi bi-folder2-open"></i>
+                    <span class="mc-obra-title">${escapeHtml(r[COLS.OBRA] || "")}</span>
+                </div>
+                <span class="${statusBadgeClass}">${stProp || "-"}</span>
+            </div>
+            <div class="mc-body">
+                <div class="mc-client text-truncate">${escapeHtml(r[COLS.CLIENTE] || "Cliente não informado")}</div>
+                <div class="mc-category text-truncate">${escapeHtml(r[COLS.CATEGORIA_GERAL] || "-")}</div>
+                
+                <div class="mc-kpi-grid mt-2">
+                    <div class="mc-kpi">
+                        <span class="mc-kpi-lbl">${isConcluida ? "Faturamento" : "Abertura"}</span>
+                        <span class="mc-kpi-val">${formatDateDisplayBR(r[indicePrimeiraDataGeral]) || '-'}</span>
+                    </div>
+                    <div class="mc-kpi">
+                        <span class="mc-kpi-lbl">Valor (${pctOrcado})</span>
+                        <span class="mc-kpi-val text-primary">R$ ${formatMoneyBR(val)}</span>
+                    </div>
+                    <div class="mc-kpi" style="grid-column: span 2;">
+                        <span class="mc-kpi-lbl">Item</span>
+                        <span class="mc-kpi-val text-truncate" style="max-width: 100%;" title="${escapeHtml(itemStr)}">${escapeHtml(itemDisplay)}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
       });
     }
 
     if (dados.length === 0) {
+      linhasRenderizadasAtuais = [];
       body.innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><i class="bi bi-folder2-open d-block mb-2" style="font-size: 2rem;"></i>Nenhum registro encontrado nesta visualização.</td></tr>`;
+      if(mobileContainer) mobileContainer.innerHTML = `<div class="text-center py-5 text-muted"><i class="bi bi-folder2-open d-block mb-2" style="font-size: 3rem; opacity: 0.5;"></i><p>Nenhuma obra nesta visão.</p></div>`;
     } else {
       body.classList.remove('animate-fade-up');
       void body.offsetWidth;
       body.classList.add('animate-fade-up');
       requestAnimationFrame(() => { body.innerHTML = html; });
+      if(mobileContainer) mobileContainer.innerHTML = htmlMobile;
     }
 
     const custoMedio = dados.length > 0 ? (totVal / dados.length) : 0;
@@ -679,6 +1182,7 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     document.getElementById('resumoValor').innerText = formatMoneyBR(totVal);
     document.getElementById('resumoCustoMedio').innerText = formatMoneyBR(custoMedio);
     document.getElementById('resumoProxima').innerText = currentStatusFilter === 'FIRMADAS' ? maiorAtraso.texto : '-';
+    requestAnimationFrame(recalibrarLayoutAplicacao);
   }
 
   function carregarGrade() {
@@ -719,6 +1223,52 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
         </div>
       </div>`;
     }).join('');
+  }
+
+  function carregar() {
+    document.getElementById('tabBody').innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">Sincronizando carteira 2026 com o ERP...</span></td></tr>`;
+    const mobileContainer = document.getElementById('mobileCardsContainer');
+    if (mobileContainer) {
+      mobileContainer.innerHTML = `<div class=\"text-center py-5 text-muted\"><div class=\"spinner-border text-primary spinner-border-sm me-2\" role=\"status\"></div><span class=\"fw-bold\">Sincronizando carteira 2026 com o ERP...</span></div>`;
+    }
+    
+    // CHAMADA ORIGINAL COM O FILTRO DE ANO ADICIONADO
+    callServer('sincronizarEFetch', [currentAnoFilter], data => {
+      if (!Array.isArray(data) || data.length === 0) { 
+        renderizar([]); 
+        return; 
+      }
+      dadosLocais = data.map((r, i) => ({ content: r, originalIndex: i }));
+      renderizar(dadosLocais.slice(1));
+    }, msg => {
+      if (msg === "motorbackend.js ausente.") return;
+
+      const erroHtmlDesktop = `
+        <tr><td colspan="20" class="text-center py-5 text-danger">
+          <i class="bi bi-database-x me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
+          <h5 class="fw-bold">Falha ao Ler a Tabela do ERP</h5>
+          <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
+            Motivo Retornado pelo Banco:<br>
+            <strong class="text-danger">${escapeHtml(msg)}</strong>
+          </span><br>
+        </td></tr>
+      `;
+      document.getElementById('tabBody').innerHTML = erroHtmlDesktop;
+
+      const mobileContainer = document.getElementById('mobileCardsContainer');
+      if (mobileContainer) {
+        mobileContainer.innerHTML = `
+          <div class="text-center py-5 text-danger px-3">
+            <i class="bi bi-database-x d-block mb-3" style="font-size: 2.5rem;"></i>
+            <h5 class="fw-bold">Falha ao Ler a Tabela do ERP</h5>
+            <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
+              Motivo Retornado pelo Banco:<br>
+              <strong class="text-danger">${escapeHtml(msg)}</strong>
+            </span>
+          </div>
+        `;
+      }
+    });
   }
 
   function atualizarResumoItem(id) {
@@ -777,7 +1327,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     if (inputForn) inputForn.value = document.getElementById(`${id}_forn_val`).value;
     if (inputOc) inputOc.value = document.getElementById(`${id}_oc_val`).value;
     
-    // Mostra o valor limpo sem cêntimos infinitos no modal
     const vRaw = document.getElementById(`${id}_valor_val`).value;
     if (inputValor) inputValor.value = (vRaw !== "" && vRaw !== null) ? parseMoneyFlexible(vRaw).toFixed(2).replace('.00', '') : "";
     
@@ -830,33 +1379,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
       if (box) box.classList.add('expanded'); if (qDesc) qDesc.value = '';
     }
     atualizarResumoItem(id); if (id !== 'fatur') atualizarFaturamentoPrevistoFormulario();
-  }
-
-  function carregar() {
-    document.getElementById('tabBody').innerHTML = `<tr><td colspan="20" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div><span class="fw-bold">Conectando ao Supabase (ERP)...</span></td></tr>`;
-    
-    callServer('sincronizarEFetch', [], data => {
-      if (!Array.isArray(data) || data.length === 0) { 
-        notify("Nenhuma obra encontrada na View do ERP."); 
-        renderizar([]); 
-        return; 
-      }
-      dadosLocais = data.map((r, i) => ({ content: r, originalIndex: i }));
-      renderizar(dadosLocais.slice(1));
-    }, msg => {
-      if (msg === "motorbackend.js ausente.") return;
-      notify("Erro de Conexão");
-      document.getElementById('tabBody').innerHTML = `
-        <tr><td colspan="20" class="text-center py-5 text-danger">
-          <i class="bi bi-database-x me-2 d-block mb-3" style="font-size: 2.5rem;"></i>
-          <h5 class="fw-bold">Falha ao Ler a Tabela do ERP</h5>
-          <span class="text-muted mt-2 d-inline-block" style="font-size:0.9rem;">
-            Motivo Retornado pelo Banco:<br>
-            <strong class="text-danger">${escapeHtml(msg)}</strong>
-          </span><br>
-        </td></tr>
-      `;
-    });
   }
 
   function limparCamposDetalhesItem(id) {
@@ -912,7 +1434,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     try {
       atualizarFaturamentoPrevistoFormulario();
       
-      // Limpa os valores monetários antes de salvar para o banco ficar perfeito
       const valorLimpo = document.getElementById('valor').value !== "" ? String(parseMoneyFlexible(document.getElementById('valor').value)) : "";
       
       const obj = { 
@@ -952,7 +1473,6 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     document.getElementById('obra').value = r[COLS.OBRA] || "";
     document.getElementById('cliente').value = r[COLS.CLIENTE] || ""; 
     
-    // Coloca os números visualmente limpos nos inputs de edição, tirando ".000000" do banco
     const rawValor = r[COLS.VALOR];
     document.getElementById('valor').value = (rawValor !== "" && rawValor !== null) ? parseMoneyFlexible(rawValor).toFixed(2).replace('.00', '') : "";
     
@@ -1020,41 +1540,74 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     let itemMaior = null;
     if (itensFinanceiros.length > 0) itemMaior = itensFinanceiros.reduce((a, b) => a.valor >= b.valor ? a : b);
 
+    const saldoStatusClass = saldoCpmvBruto < 0 ? 'is-alert' : 'is-ok';
+    const leituraCritica = itemMaior
+      ? `maior peso atual em <strong>${itemMaior.item}</strong>`
+      : 'nenhum item com custo lançado';
+    const leituraPercentual = itemMaior && totalUsadoCpmv > 0
+      ? `${((itemMaior.valor / totalUsadoCpmv) * 100).toFixed(1)}% da compra total`
+      : '-';
+
     let html = `
-      <div class="resumo-modal-shell">
-        <div class="finance-headline">
-          <div class="finance-headline-item"><span class="finance-headline-icon"><i class="bi bi-wallet2"></i></span><div><div class="finance-headline-label">CPMV Planejado</div><div class="finance-headline-value">${formatMoneyBR(cpmv)}</div></div></div>
-          <div class="finance-headline-item"><span class="finance-headline-icon"><i class="bi bi-graph-up-arrow"></i></span><div><div class="finance-headline-label">CPMV já utilizado</div><div class="finance-headline-value">${formatMoneyBR(totalUsadoCpmv)}</div></div></div>
-          <div class="finance-headline-item"><span class="finance-headline-icon fin-green"><i class="bi bi-pie-chart"></i></span><div><div class="finance-headline-label">Saldo disponível no CPMV</div><div class="finance-headline-value">${formatMoneyBR(saldoCpmv)}</div></div></div>
-        </div>
-        <div class="finance-progress-wrap">
-          <div class="finance-progress-top"><span><i class="bi bi-bar-chart-line me-1"></i><span class="finance-progress-main">Uso do custo planejado</span></span><span>${percCpmv.toFixed(1)}% utilizado</span></div>
-          <div class="finance-progress-bar"><div class="finance-progress-fill" style="width:${percCpmvLimitado}%"></div></div>
-        </div>
-        <div class="finance-insight-grid">
-          <div class="finance-insight-card">
-            <div class="finance-insight-card-top"><div class="finance-insight-card-label">Análise CPMV</div><div class="finance-insight-card-value">${percCpmv.toFixed(1)}% usado</div></div>
-            <div class="finance-kpi-list">
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Uso registrado</span><span class="finance-kpi-data">${formatMoneyBR(totalUsadoCpmv)}</span></div>
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Participação no CPMV</span><span class="finance-kpi-data">${percCpmv.toFixed(1)}%</span></div>
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Saldo disponível</span><span class="finance-kpi-data ${saldoCpmvBruto < 0 ? 'is-alert' : 'is-ok'}">${formatMoneyBR(saldoCpmvBruto)}</span></div>
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Saldo percentual</span><span class="finance-kpi-data ${saldoCpmvBruto < 0 ? 'is-alert' : 'is-ok'}">${percSaldoCpmv.toFixed(1)}%</span></div>
-            </div>
+      <div class="erp-page erp-finance-page">
+        <section class="erp-command-panel">
+          <div class="erp-command-copy">
+            <span class="erp-command-kicker"><i class="bi bi-wallet2"></i> Painel financeiro da obra</span>
+            <h2>Resumo de CPMV e compras</h2>
+            <p>Visão operacional do custo planejado, uso registrado, saldo disponível e participação dos itens da obra.</p>
           </div>
-          <div class="finance-insight-card">
-            <div class="finance-insight-card-top"><div class="finance-insight-card-label">Itens de compra</div><div class="finance-insight-card-value">${totalItensCompra} items</div></div>
-            <div class="finance-kpi-list">
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Base monitorada</span><span class="finance-kpi-data">${totalItensCompra} items</span></div>
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Concluídos</span><span class="finance-kpi-data is-ok">${itensOk} · ${percItensOk.toFixed(1)}%</span></div>
-              <div class="finance-kpi-row"><span class="finance-kpi-name">Pendentes</span><span class="finance-kpi-data ${itensFalta > 0 ? 'is-alert' : 'is-ok'}">${itensFalta} · ${percItensFalta.toFixed(1)}%</span></div>
-            </div>
+          <div class="erp-command-side ${saldoStatusClass}">
+            <span>Status do CPMV</span>
+            <strong>${percCpmv.toFixed(1)}%</strong>
+            <small>${formatMoneyBR(totalUsadoCpmv)} utilizado de ${formatMoneyBR(cpmv)}</small>
           </div>
-        </div>
-        <div class="finance-insight"><span><i class="bi bi-activity me-1"></i><strong>Leitura crítica:</strong> ${itemMaior ? `maior peso atual em <strong>${itemMaior.item}</strong>` : 'nenhum item com custo lançado'}</span><span>${itemMaior && totalUsadoCpmv > 0 ? `${((itemMaior.valor / totalUsadoCpmv) * 100).toFixed(1)}% da compra total` : '-'}</span></div>
-        <div class="finance-scroll-area resumo-modal-scroll">
-          <div class="finance-table-shell"><div class="table-responsive"><table class="table table-sm text-center align-middle">
-            <thead><tr><th>Item</th><th>Status</th><th>Valor</th><th>% / CPMV</th><th>% / Compra Total</th></tr></thead>
-            <tbody>
+        </section>
+
+        <section class="erp-kpi-strip">
+          <article class="erp-kpi-card">
+            <span class="erp-kpi-icon"><i class="bi bi-briefcase"></i></span>
+            <div><small>CPMV planejado</small><strong>${formatMoneyBR(cpmv)}</strong></div>
+          </article>
+          <article class="erp-kpi-card">
+            <span class="erp-kpi-icon"><i class="bi bi-graph-up-arrow"></i></span>
+            <div><small>CPMV utilizado</small><strong>${formatMoneyBR(totalUsadoCpmv)}</strong></div>
+          </article>
+          <article class="erp-kpi-card ${saldoCpmvBruto < 0 ? 'is-alert' : 'is-ok'}">
+            <span class="erp-kpi-icon"><i class="bi bi-pie-chart"></i></span>
+            <div><small>Saldo disponível</small><strong>${formatMoneyBR(saldoCpmv)}</strong></div>
+          </article>
+          <article class="erp-kpi-card">
+            <span class="erp-kpi-icon"><i class="bi bi-box-seam"></i></span>
+            <div><small>Itens monitorados</small><strong>${totalItensCompra}</strong></div>
+          </article>
+        </section>
+
+        <section class="erp-workspace-grid">
+          <main class="erp-workspace-main">
+            <article class="erp-panel erp-panel-progress">
+              <div class="erp-panel-heading">
+                <div>
+                  <span>Controle de consumo</span>
+                  <h3>Uso do custo planejado</h3>
+                </div>
+                <strong>${percCpmv.toFixed(1)}% utilizado</strong>
+              </div>
+              <div class="erp-progress-track"><div class="erp-progress-fill" style="width:${percCpmvLimitado}%"></div></div>
+              <div class="erp-progress-legend"><span>0%</span><span>50%</span><span>100%</span></div>
+            </article>
+
+            <article class="erp-panel erp-panel-table">
+              <div class="erp-panel-heading">
+                <div>
+                  <span>Detalhamento financeiro</span>
+                  <h3>Itens registrados na obra</h3>
+                </div>
+                <strong>${totalItensCompra} itens</strong>
+              </div>
+              <div class="erp-table-wrap">
+                <table class="erp-data-table">
+                  <thead><tr><th>Item</th><th>Status</th><th>Valor</th><th>% / CPMV</th><th>% / Compra total</th></tr></thead>
+                  <tbody>
     `;
 
     itensFinanceiros.forEach(reg => {
@@ -1062,37 +1615,313 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
       const pCompra = totalUsadoCpmv > 0 ? ((reg.valor / totalUsadoCpmv) * 100).toFixed(1) : "0.0";
       const statusExibicao = isStatusDate(reg.status) ? formatDateDisplayBR(reg.status) : reg.status;
       const statusClass = reg.status === "OK" ? "is-ok" : (reg.status === "?" ? "is-alert" : (isStatusDate(reg.status) ? "is-date" : ""));
-      html += `<tr><td class="finance-item-name">${reg.item}</td><td><span class="finance-status-badge ${statusClass}">${statusExibicao}</span></td><td>${formatMoneyBR(reg.valor)}</td><td class="finance-percent-main">${pTotal}%</td><td class="finance-percent-sub">${pCompra}%</td></tr>`;
+      html += `<tr><td class="erp-td-strong">${reg.item}</td><td><span class="erp-status-badge ${statusClass}">${statusExibicao}</span></td><td>${formatMoneyBR(reg.valor)}</td><td class="erp-percent">${pTotal}%</td><td class="erp-percent muted">${pCompra}%</td></tr>`;
     });
 
-    if (itensFinanceiros.length === 0) html += `<tr><td colspan="5" class="finance-empty">Nenhum item financeiro registrado.</td></tr>`;
+    if (itensFinanceiros.length === 0) html += `<tr><td colspan="5" class="erp-empty-row">Nenhum item financeiro registrado.</td></tr>`;
 
-    html += `</tbody><tfoot><tr><td colspan="2">Total</td><td>${formatMoneyBR(totalUsadoCpmv)}</td><td>${percCpmv.toFixed(1)}%</td><td>${itensFinanceiros.length > 0 ? '100%' : '0%'}</td></tr></tfoot></table></div></div></div></div>`;
+    html += `</tbody><tfoot><tr><td colspan="2">Total de compras</td><td>${formatMoneyBR(totalUsadoCpmv)}</td><td>${percCpmv.toFixed(1)}%</td><td>${itensFinanceiros.length > 0 ? '100%' : '0%'}</td></tr></tfoot>
+                </table>
+              </div>
+            </article>
+          </main>
+
+          <aside class="erp-workspace-aside">
+            <article class="erp-panel erp-side-panel">
+              <div class="erp-panel-heading compact">
+                <div><span>Análise CPMV</span><h3>${percCpmv.toFixed(1)}% usado</h3></div>
+              </div>
+              <div class="erp-info-list">
+                <div><span>Uso registrado</span><strong>${formatMoneyBR(totalUsadoCpmv)}</strong></div>
+                <div><span>Participação no CPMV</span><strong>${percCpmv.toFixed(1)}%</strong></div>
+                <div><span>Saldo disponível</span><strong class="${saldoStatusClass}">${formatMoneyBR(saldoCpmvBruto)}</strong></div>
+                <div><span>Saldo percentual</span><strong class="${saldoStatusClass}">${percSaldoCpmv.toFixed(1)}%</strong></div>
+              </div>
+            </article>
+
+            <article class="erp-panel erp-side-panel">
+              <div class="erp-panel-heading compact">
+                <div><span>Itens de compra</span><h3>${totalItensCompra} itens</h3></div>
+              </div>
+              <div class="erp-info-list">
+                <div><span>Base monitorada</span><strong>${totalItensCompra} itens</strong></div>
+                <div><span>Concluídos</span><strong class="is-ok">${itensOk} · ${percItensOk.toFixed(1)}%</strong></div>
+                <div><span>Pendentes</span><strong class="${itensFalta > 0 ? 'is-alert' : 'is-ok'}">${itensFalta} · ${percItensFalta.toFixed(1)}%</strong></div>
+              </div>
+            </article>
+
+            <article class="erp-panel erp-reading-panel">
+              <span class="erp-panel-mini-title">Leitura crítica</span>
+              <p><i class="bi bi-activity"></i> <span>${leituraCritica}</span></p>
+              <strong>${leituraPercentual}</strong>
+            </article>
+          </aside>
+        </section>
+      </div>`;
 
     document.getElementById('tituloResumo').innerText = "Resumo Financeiro da Obra"; document.getElementById('corpoResumoGeral').innerHTML = html; modalResumoUI.show();
   }
-
   function abrirResumoGeral() {
     const obra = document.getElementById('obra').value.trim();
     if (!obra) { notify("Informe a obra para consultar a base geral."); return; }
-    document.getElementById('corpoResumoGeral').innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3 fw-bold text-muted">Buscando dados na base GERAL...</p></div>`; modalResumoUI.show();
+
+    const corpo = document.getElementById('corpoResumoGeral');
+    corpo.innerHTML = `<div class="erp-page-loading"><div class="spinner-border text-primary" role="status"></div><p>Buscando dados na base GERAL...</p></div>`;
+    modalResumoUI.show();
 
     callServer('getResumoGeralObra', [obra], res => {
-      if (!res || !res.encontrado) { document.getElementById('corpoResumoGeral').innerHTML = `<p class="text-center text-muted fw-bold py-5"><i class="bi bi-search d-block mb-2" style="font-size: 2rem;"></i>Obra não localizada na base.</p>`; return; }
-      const lista = Array.isArray(res.dados) ? res.dados : []; const mapa = {}; lista.forEach(d => { mapa[String(d.label || "").trim().toUpperCase()] = d.valor || "-"; });
-      
-      const total = parseMoneyFlexible(mapa["P. TOTAL"]); 
-      const recebido = parseMoneyFlexible(mapa["RECEB."]); 
-      const carteira = parseMoneyFlexible(mapa["A RECEB"] || mapa["EM CARTEIRA"]); 
-      const percentualRecebido = total > 0 ? Math.min((recebido / total) * 100, 100) : 0;
-      
-      const infoPrincipal = [ { icon: "bi-folder2-open", label: "Obra", valor: mapa["OBRA"] || obra }, { icon: "bi-building", label: "Cliente", valor: mapa["CLIENTE"] || "-" }, { icon: "bi-box-seam", label: "Item", valor: mapa["ITEM"] || "-" }, { icon: "bi-tags", label: "Categoria", valor: mapa["CATEGORIA"] || "-" } ];
-      const infoComplementar = [ { icon: "bi-calendar-event", label: "Data abertura", valor: mapa["DATA ABERTURA"] || "-" }, { icon: "bi-pen", label: "Data firmada", valor: mapa["DATA FIRMADA"] || "-" }, { icon: "bi-grid", label: "Compl.", valor: mapa["COMPL."] || "-" }, { icon: "bi-geo-alt", label: "UF", valor: mapa["UF"] || "-" } ];
-      const montarCards = (arr) => arr.map(d => `<div class="geral-card"><div class="geral-card-label"><i class="bi ${d.icon} me-1"></i>${d.label}</div><div class="geral-card-value">${d.valor}</div></div>`).join('');
+      if (!res || !res.encontrado) {
+        corpo.innerHTML = `<div class="erp-page-empty"><i class="bi bi-search"></i><strong>Obra não localizada na base.</strong><span>Confira o número informado e tente novamente.</span></div>`;
+        return;
+      }
 
-      const html = `<div class="resumo-modal-scroll"><div class="geral-shell"><section class="geral-section"><h6 class="geral-section-title"><i class="bi bi-layout-text-window-reverse"></i> Dados principais</h6><div class="geral-grid">${montarCards(infoPrincipal)}</div></section><section class="geral-section"><h6 class="geral-section-title"><i class="bi bi-diagram-3"></i> Informações complementares</h6><div class="geral-grid">${montarCards(infoComplementar)}</div></section><section class="geral-section"><h6 class="geral-section-title"><i class="bi bi-graph-up-arrow"></i> Visão financeira</h6><div class="geral-card geral-total-card"><div class="geral-card-label"><i class="bi bi-wallet2 me-1"></i>Valor total da obra</div><div class="geral-card-value money">${formatMoneyBR(total)}</div><div class="geral-card-sub">Base geral consolidada</div><div class="geral-progress-track"><div class="geral-progress-bar" style="width:${percentualRecebido.toFixed(1)}%"></div></div></div><div class="geral-finance-grid"><div class="geral-card"><div class="geral-card-label"><i class="bi bi-arrow-down-circle me-1"></i>Valor recebido</div><div class="geral-card-value money">${formatMoneyBR(recebido)}</div><div class="geral-card-sub">${percentualRecebido.toFixed(1)}% do total</div></div><div class="geral-card"><div class="geral-card-label"><i class="bi bi-hourglass-split me-1"></i>Valor a receber</div><div class="geral-card-value money">${formatMoneyBR(carteira)}</div><div class="geral-card-sub">${total > 0 ? Math.max(0, 100 - percentualRecebido).toFixed(1) : "0.0"}% do total</div></div></div></section></div></div>`;
-      document.getElementById('tituloResumo').innerText = "Dados da Base Geral"; document.getElementById('corpoResumoGeral').innerHTML = html;
-    }, msg => { document.getElementById('corpoResumoGeral').innerHTML = `<p class="text-center text-danger fw-bold py-5">Erro na busca: ${msg}</p>`; notify("Erro na busca: " + msg); });
+      const lista = Array.isArray(res.dados) ? res.dados : [];
+      const mapa = {};
+      lista.forEach(d => {
+        const chave = String(d.label || "").trim().toUpperCase();
+        if (chave && mapa[chave] === undefined) mapa[chave] = d.valor || "-";
+      });
+
+      const obterCampo = (...labels) => {
+        for (const label of labels) {
+          const chave = String(label || "").trim().toUpperCase();
+          const valor = mapa[chave];
+          if (valor !== null && valor !== undefined && String(valor).trim() !== "" && String(valor).trim() !== "-") return valor;
+        }
+        return "-";
+      };
+
+      const isPreenchido = value => value !== null && value !== undefined && String(value).trim() !== "" && String(value).trim() !== "-";
+      const exibirCampo = value => escapeHtml(String(value ?? "-").trim() || "-");
+      const exibirMoney = value => `R$ ${formatMoneyBR(value)}`;
+
+      const obraBase = obterCampo("OBRA") !== "-" ? obterCampo("OBRA") : obra;
+      const clienteBase = obterCampo("CLIENTE", "RAZÃO SOCIAL", "RAZAO SOCIAL");
+      const itemBase = obterCampo("ITEM", "DESCRIÇÃO", "DESCRICAO");
+      const categoriaBase = obterCampo("CATEGORIA", "CATEG.");
+      const dataAbertura = obterCampo("DATA ABERTURA", "ABERTURA");
+      const dataFirmada = obterCampo("DATA FIRMADA", "FIRMADA");
+      const dataEnviada = obterCampo("DATA ENVIADA", "ENVIADA");
+      const dataFaturamento = obterCampo("DATA FATURAMENTO", "FATURAMENTO", "DATA FATURAM");
+      const ufBase = obterCampo("UF");
+      const etapaBase = obterCampo("ETAPA", "STATUS", "SITUAÇÃO", "SITUACAO");
+      const vendedorBase = obterCampo("VENDEDOR", "RESPONSÁVEL", "RESPONSAVEL");
+      const segmentoBase = obterCampo("SEGMENTO");
+      const complexidadeBase = obterCampo("COMPLEXIDADE");
+      const complementoBase = obterCampo("COMPL.", "COMPLEMENTO", "COMPL");
+      const nfBase = obterCampo("NF", "NFE", "NOTA FISCAL", "NOTA");
+      const cpmvBase = obterCampo("CPMV");
+      const prazoBase = obterCampo("PRAZO", "PZ", "PRAZ", "DIAS PRAZO");
+
+      const total = parseMoneyFlexible(obterCampo("P. TOTAL", "VALOR TOTAL", "TOTAL", "VALOR"));
+      const recebido = parseMoneyFlexible(obterCampo("RECEB.", "RECEBIDO", "VALOR RECEBIDO"));
+      const carteira = parseMoneyFlexible(obterCampo("A RECEB", "A RECEBER", "EM CARTEIRA"));
+      const percentualRecebido = total > 0 ? Math.min((recebido / total) * 100, 100) : 0;
+
+      const statusOperacional = isPreenchido(dataFaturamento)
+        ? "Faturada"
+        : (isPreenchido(dataFirmada)
+          ? "Firmada"
+          : (isPreenchido(dataEnviada)
+            ? "Enviada"
+            : (isPreenchido(etapaBase) ? etapaBase : "Base geral")));
+
+      const statusClasse = isPreenchido(dataFaturamento)
+        ? "is-ok"
+        : (isPreenchido(dataFirmada) ? "is-primary" : (isPreenchido(dataEnviada) ? "is-warning" : "is-neutral"));
+
+      const camposPrincipais = [
+        { icon: "bi-building", label: "Cliente", valor: clienteBase, destaque: true },
+        { icon: "bi-folder2-open", label: "Obra", valor: obraBase },
+        { icon: "bi-box-seam", label: "Item", valor: itemBase },
+        { icon: "bi-tags", label: "Categoria", valor: categoriaBase },
+        { icon: "bi-person-badge", label: "Responsável", valor: vendedorBase },
+        { icon: "bi-geo-alt", label: "UF", valor: ufBase },
+        { icon: "bi-diagram-3", label: "Segmento", valor: segmentoBase },
+        { icon: "bi-sliders", label: "Complexidade", valor: complexidadeBase }
+      ];
+
+      const camposSituacao = [
+        { icon: "bi-calendar-plus", label: "Abertura", valor: dataAbertura },
+        { icon: "bi-send", label: "Enviada", valor: dataEnviada },
+        { icon: "bi-pen", label: "Firmada", valor: dataFirmada },
+        { icon: "bi-receipt-cutoff", label: "Faturamento", valor: dataFaturamento },
+        { icon: "bi-flag", label: "Etapa", valor: etapaBase },
+        { icon: "bi-receipt", label: "NF", valor: nfBase },
+        { icon: "bi-calendar2-week", label: "Prazo", valor: prazoBase },
+        { icon: "bi-grid", label: "Complemento", valor: complementoBase }
+      ];
+
+      const camposFinanceiros = [
+        { label: "Valor total", valor: exibirMoney(total), classe: "is-main" },
+        { label: "Recebido", valor: exibirMoney(recebido), classe: "is-ok" },
+        { label: "A receber", valor: exibirMoney(carteira), classe: "" },
+        { label: "CPMV", valor: exibirCampo(cpmvBase), classe: "" }
+      ];
+
+      const labelsUsados = new Set([
+        "OBRA", "CLIENTE", "RAZÃO SOCIAL", "RAZAO SOCIAL", "ITEM", "DESCRIÇÃO", "DESCRICAO", "CATEGORIA", "CATEG.",
+        "DATA ABERTURA", "ABERTURA", "DATA FIRMADA", "FIRMADA", "DATA ENVIADA", "ENVIADA", "DATA FATURAMENTO", "FATURAMENTO", "DATA FATURAM",
+        "UF", "ETAPA", "STATUS", "SITUAÇÃO", "SITUACAO", "VENDEDOR", "RESPONSÁVEL", "RESPONSAVEL", "SEGMENTO", "COMPLEXIDADE",
+        "COMPL.", "COMPLEMENTO", "COMPL", "NF", "NFE", "NOTA FISCAL", "NOTA", "CPMV", "PRAZO", "PZ", "PRAZ", "DIAS PRAZO",
+        "P. TOTAL", "VALOR TOTAL", "TOTAL", "VALOR", "RECEB.", "RECEBIDO", "VALOR RECEBIDO", "A RECEB", "A RECEBER", "EM CARTEIRA"
+      ]);
+
+      const dadosAdicionais = lista
+        .filter(d => !labelsUsados.has(String(d.label || "").trim().toUpperCase()))
+        .filter(d => isPreenchido(d.valor));
+
+      const montarCampo = d => `
+        <article class="cbase-field-card ${d.destaque ? "is-wide" : ""} ${!isPreenchido(d.valor) ? "is-empty" : ""}">
+          <span><i class="bi ${d.icon}"></i>${exibirCampo(d.label)}</span>
+          <strong>${exibirCampo(d.valor)}</strong>
+        </article>
+      `;
+
+      const montarLinhaTempo = () => camposSituacao.map(d => `
+        <div class="cbase-timeline-item ${isPreenchido(d.valor) ? "is-active" : ""}">
+          <span class="cbase-timeline-icon"><i class="bi ${d.icon}"></i></span>
+          <div>
+            <small>${exibirCampo(d.label)}</small>
+            <strong>${exibirCampo(d.valor)}</strong>
+          </div>
+        </div>
+      `).join('');
+
+      const montarDadosAdicionais = () => {
+        if (!dadosAdicionais.length) {
+          return `<div class="cbase-empty-line"><i class="bi bi-info-circle"></i><span>Nenhum campo adicional preenchido foi retornado pela base.</span></div>`;
+        }
+
+        return `
+          <div class="cbase-table-wrap">
+            <table class="cbase-table">
+              <tbody>
+                ${dadosAdicionais.map(d => `
+                  <tr>
+                    <th>${exibirCampo(d.label)}</th>
+                    <td>${exibirCampo(d.valor)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      };
+
+      const html = `
+        <div class="cbase-page">
+          <section class="cbase-hero">
+            <div class="cbase-hero-main">
+              <span class="cbase-eyebrow"><i class="bi bi-database-check"></i> Consulta da base ERP</span>
+              <h2>Obra ${exibirCampo(obraBase)}</h2>
+              <p>${exibirCampo(clienteBase)}</p>
+              <div class="cbase-chip-row">
+                <span class="cbase-status ${statusClasse}"><i class="bi bi-circle-fill"></i>${exibirCampo(statusOperacional)}</span>
+                <span><i class="bi bi-tags"></i>${exibirCampo(categoriaBase)}</span>
+                <span><i class="bi bi-geo-alt"></i>${exibirCampo(ufBase)}</span>
+              </div>
+            </div>
+
+            <aside class="cbase-hero-side">
+              <span>Valor de referência</span>
+              <strong>${exibirMoney(total)}</strong>
+              <small>${percentualRecebido.toFixed(1)}% recebido pela base</small>
+            </aside>
+          </section>
+
+          <section class="cbase-kpis">
+            <article>
+              <span><i class="bi bi-calendar-event"></i></span>
+              <div><small>Abertura</small><strong>${exibirCampo(dataAbertura)}</strong></div>
+            </article>
+            <article>
+              <span><i class="bi bi-person-badge"></i></span>
+              <div><small>Responsável</small><strong>${exibirCampo(vendedorBase)}</strong></div>
+            </article>
+            <article>
+              <span><i class="bi bi-receipt-cutoff"></i></span>
+              <div><small>NF</small><strong>${exibirCampo(nfBase)}</strong></div>
+            </article>
+            <article>
+              <span><i class="bi bi-hourglass-split"></i></span>
+              <div><small>A receber</small><strong>${exibirMoney(carteira)}</strong></div>
+            </article>
+          </section>
+
+          <section class="cbase-layout">
+            <main class="cbase-main">
+              <article class="cbase-section">
+                <header>
+                  <span>Dados da proposta</span>
+                  <h3>Ficha principal da obra</h3>
+                </header>
+                <div class="cbase-field-grid">
+                  ${camposPrincipais.map(montarCampo).join('')}
+                </div>
+              </article>
+
+              <article class="cbase-section">
+                <header>
+                  <span>Situação e datas</span>
+                  <h3>Acompanhamento do registro</h3>
+                </header>
+                <div class="cbase-field-grid">
+                  ${camposSituacao.map(montarCampo).join('')}
+                </div>
+              </article>
+
+              <article class="cbase-section">
+                <header>
+                  <span>Base ERP</span>
+                  <h3>Campos adicionais disponíveis</h3>
+                </header>
+                ${montarDadosAdicionais()}
+              </article>
+            </main>
+
+            <aside class="cbase-aside">
+              <article class="cbase-section cbase-finance">
+                <header>
+                  <span>Resumo financeiro</span>
+                  <h3>Leitura rápida</h3>
+                </header>
+                <div class="cbase-progress"><div style="width:${percentualRecebido.toFixed(1)}%"></div></div>
+                <div class="cbase-finance-list">
+                  ${camposFinanceiros.map(d => `
+                    <div>
+                      <span>${exibirCampo(d.label)}</span>
+                      <strong class="${d.classe}">${d.valor}</strong>
+                    </div>
+                  `).join('')}
+                </div>
+              </article>
+
+              <article class="cbase-section cbase-timeline">
+                <header>
+                  <span>Linha do tempo</span>
+                  <h3>Eventos da obra</h3>
+                </header>
+                ${montarLinhaTempo()}
+              </article>
+
+              <article class="cbase-section cbase-note">
+                <header>
+                  <span>Observação</span>
+                  <h3>Consulta segura</h3>
+                </header>
+                <p><i class="bi bi-shield-check"></i>Esta tela reorganiza os dados retornados pela base geral. Nenhuma regra financeira, cálculo ou consolidação foi alterada.</p>
+              </article>
+            </aside>
+          </section>
+        </div>`;
+
+      document.getElementById('tituloResumo').innerText = `Resumo da Obra - ${obraBase}`;
+      corpo.innerHTML = html;
+    }, msg => {
+      corpo.innerHTML = `<div class="erp-page-empty is-error"><i class="bi bi-exclamation-triangle"></i><strong>Erro na busca</strong><span>${msg}</span></div>`;
+      notify("Erro na busca: " + msg);
+    });
   }
 
   function deletar() { 
@@ -1378,19 +2207,106 @@ const ITENS = ["BBA/ELET.", "MT", "FLUT.", "M FV.", "AD. FLEX", "AD. RIG.", "FIX
     } catch (e) { console.error(e); notify('Não foi possível montar o relatório em PDF.'); }
   }
 
-  function ajustarRolagemDaTabela() {
-    const viewport = document.querySelector('.table-viewport'); if (!viewport) return;
-    const viewportTop = viewport.getBoundingClientRect().top; const alturaJanela = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const margemInferior = window.innerWidth <= 768 ? 32 : 40; const alturaDisponivel = Math.max(260, alturaJanela - viewportTop - margemInferior);
-    viewport.style.maxHeight = `${alturaDisponivel}px`; viewport.classList.add('table-scroll-locked');
+  let eventosResponsivosRegistrados = false;
+  let blindagemModaisRegistrada = false;
+
+  function sincronizarAnoFixoNaInterface() {
+    const anoEfetivo = '26';
+    const selectMobile = document.getElementById('anoFilterMobile');
+    const selectPC = document.getElementById('anoFilterPC');
+
+    if (selectMobile) selectMobile.value = anoEfetivo;
+    if (selectPC) selectPC.value = anoEfetivo;
   }
 
-  window.addEventListener('resize', ajustarRolagemDaTabela);
+  function atualizarShellResponsivo() {
+    const root = document.documentElement;
+    const body = document.body;
+    if (!root || !body) return;
 
-  window.onload = () => { 
+    const vv = window.visualViewport;
+    const altura = Math.round(vv ? vv.height : window.innerHeight);
+    const largura = Math.round(vv ? vv.width : window.innerWidth);
+
+    root.style.setProperty('--app-vh', `${altura}px`);
+    root.style.setProperty('--app-vw', `${largura}px`);
+
+    const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+    body.classList.toggle('device-mobile-shell', isMobile);
+    body.classList.toggle('device-desktop-shell', !isMobile);
+  }
+
+  function ajustarRolagemDaTabela() {
+    const viewport = document.querySelector('.table-viewport');
+    if (!viewport) return;
+
+    const viewportTop = viewport.getBoundingClientRect().top;
+    const alturaJanela = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const margemInferior = document.body.classList.contains('device-mobile-shell') ? 24 : 36;
+    const alturaDisponivel = Math.max(260, alturaJanela - viewportTop - margemInferior);
+
+    viewport.style.maxHeight = `${alturaDisponivel}px`;
+    viewport.classList.add('table-scroll-locked');
+  }
+
+  function recalibrarLayoutAplicacao() {
+    atualizarShellResponsivo();
+    sincronizarAnoFixoNaInterface();
+    ajustarRolagemDaTabela();
+  }
+
+  function registrarEventosResponsivos() {
+    if (eventosResponsivosRegistrados) return;
+    eventosResponsivosRegistrados = true;
+
+    const handler = () => {
+      fecharMenuExtracao();
+      recalibrarLayoutAplicacao();
+    };
+
+    window.addEventListener('resize', handler);
+    window.addEventListener('orientationchange', handler);
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handler);
+      window.visualViewport.addEventListener('scroll', handler);
+    }
+  }
+
+  function configurarBlindagemViewportDosModais() {
+    if (blindagemModaisRegistrada) return;
+    blindagemModaisRegistrada = true;
+
+    ['modalObra', 'modalCompraItem', 'modalPendenciaItem', 'modalResumoGeral', 'modalExtracaoRelatorio'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      el.addEventListener('shown.bs.modal', () => {
+        document.body.classList.add('app-modal-open');
+        setTimeout(recalibrarLayoutAplicacao, 30);
+      });
+
+      el.addEventListener('hidden.bs.modal', () => {
+        if (!document.querySelector('.modal.show')) {
+          document.body.classList.remove('app-modal-open');
+        }
+        setTimeout(recalibrarLayoutAplicacao, 30);
+      });
+    });
+  }
+
+  window.onload = () => {
+    currentAnoFilter = '26';
     initModais();
+    configurarBlindagemViewportDosModais();
+    registrarEventosResponsivos();
     configurarCabecalhoData();
     carregarGrade();
-    carregar(); 
-    setTimeout(ajustarRolagemDaTabela, 120);
+    preencherOpcoesFiltroConcluidas();
+    atualizarVisibilidadeFiltroConcluidas();
+    sincronizarFiltroConcluidasNaInterface();
+    sincronizarAnoFixoNaInterface();
+    recalibrarLayoutAplicacao();
+    carregar();
+    setTimeout(recalibrarLayoutAplicacao, 120);
   };
