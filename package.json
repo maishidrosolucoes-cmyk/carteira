@@ -1,0 +1,15 @@
+{
+  "name": "carteira-mhs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build local e validacao da aplicacao estatica Carteira MHS.",
+  "scripts": {
+    "check": "node tools/check-syntax.mjs && node tools/check-finance-lock.mjs && node tools/check-domain-rules.mjs",
+    "build": "node tools/build.mjs",
+    "finance:lock": "node tools/lock-finance-month.mjs",
+    "serve": "node tools/static-server.mjs .",
+    "preview": "node tools/static-server.mjs dist",
+    "verify": "npm run check && npm run build"
+  },
+  "devDependencies": {}
+}
